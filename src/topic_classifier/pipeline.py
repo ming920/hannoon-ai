@@ -6,6 +6,7 @@ from db import events, topics, topic_causes
 from embedding import embed_passage, embed_query, to_vector_literal
 from openai_client.client import LLMClient
 from topic_classifier.prompts import (
+    build_subtopic_assignment_prompt,
     build_topic_assignment_prompt,
     build_topic_cause_result_prompt,
     build_topic_rollup_prompt,
@@ -28,6 +29,18 @@ WHERE topic_id = ?
   AND summary IS NOT NULL
   AND btrim(summary) <> ''
 ORDER BY created_at ASC, id ASC
+"""
+
+# 부모 토픽 단위 요약 롤업용: 해당 부모 아래 모든 서브토픽에 달린 이벤트와,
+# (계층 도입 이전에) 부모 토픽에 직접 달려 있던 이벤트를 함께 모은다.
+FETCH_PARENT_TOPIC_SUMMARY_EVENTS_SQL = """
+SELECT e.id AS id, e.title AS title, e.summary AS summary
+FROM events e
+JOIN topics t ON t.id = e.topic_id
+WHERE (t.parent_topic_id = ? OR t.id = ?)
+  AND e.summary IS NOT NULL
+  AND btrim(e.summary) <> ''
+ORDER BY e.created_at ASC, e.id ASC
 """
 
 
@@ -85,6 +98,78 @@ def _load_topic_summary_events(conn, topic_id: int) -> list[dict]:
     ]
 
 
+def _load_parent_summary_events(conn, parent_topic_id: int) -> list[dict]:
+    """부모 토픽 롤업용으로 그 아래 서브토픽 이벤트들을 모은다."""
+    return [
+        {
+            "event_id": row["id"],
+            "title": row["title"],
+            "summary": normalize_summary(row["summary"]),
+        }
+        for row in conn.query(
+            FETCH_PARENT_TOPIC_SUMMARY_EVENTS_SQL,
+            (parent_topic_id, parent_topic_id),
+        )
+        if normalize_summary(row["summary"])
+    ]
+
+
+def _resolve_action(client, candidates, build_prompt, *, fallback_title, fallback_reason="검색 후보 없음"):
+    """assign-or-create 결정을 공통 처리한다.
+
+    후보가 있으면 LLM 배정 판단을, 후보가 0개면 LLM 호출을 생략하고 즉시 create로
+    결정한다(비용 전략 핵심). 이어서 점수/사유 가드레일을 적용해 모순된 assign을
+    create로 강등한 뒤 (action, decision)을 반환한다. 평면·계층 분류가 모두 재사용한다.
+    """
+    if candidates:
+        decision = _call_json(client, build_prompt(), required_keys={"action"})
+    else:
+        decision = {
+            "action": "create",
+            "new_title": fallback_title,
+            "score": 0.0,
+            "reason": fallback_reason,
+        }
+
+    action = decision["action"]
+    if action not in {"assign", "create"}:
+        raise ValueError(f"Invalid topic action from LLM: {action!r}")
+    if action == "assign" and (
+        _load_decision_score(decision) < ASSIGN_SCORE_THRESHOLD
+        or _reason_rejects_assignment(decision.get("reason"))
+    ):
+        decision = {
+            "action": "create",
+            "new_title": fallback_title,
+            "score": _load_decision_score(decision),
+            "reason": (
+                "기존 후보와 직접 상관관계가 없다는 배정 사유가 감지되어 "
+                "새 토픽으로 생성"
+            ),
+        }
+        action = "create"
+    return action, decision
+
+
+def _select_candidate(decision, candidates):
+    """LLM이 고른 topic_id가 실제 후보 집합에 있는지 검증하고 해당 후보를 반환한다."""
+    topic_id = int(decision["topic_id"])
+    candidate_ids = {candidate.topic_id for candidate in candidates}
+    if topic_id not in candidate_ids:
+        raise ValueError(f"LLM selected unknown topic_id={topic_id}.")
+    return next(candidate for candidate in candidates if candidate.topic_id == topic_id)
+
+
+def _link_chain(conn, leaf_topic_id: int, event_id: int) -> None:
+    """leaf 토픽(평면 토픽 또는 서브토픽) 내부 이벤트 prev/next 체인을 연결한다."""
+    prev = events.find_prev_event(conn, leaf_topic_id, event_id)
+    if prev is not None:
+        prev_id, next_id = prev["id"], prev["next_event_id"]
+    else:
+        prev_id, next_id = None, events.find_next_event_id(conn, leaf_topic_id, event_id)
+    events.link_into_chain(conn, event_id, prev_id, next_id)
+
+
 def _append_event_summary(
     items: list[dict],
     *,
@@ -125,16 +210,252 @@ def _generate_topic_update(
     }
 
 
-def run(conn, min_net: int, batch_size: int, top_k: int, llm_model: str) -> int:
-    """미분류 이벤트를 기존 토픽에 배정하거나 새 토픽으로 생성한다."""
+def _assign_flat(conn, client, ev, cause: str, result: str, top_k: int) -> str:
+    """평면(단일 레벨) 토픽 배정. 기존 동작과 동일하며 헬퍼로만 정리했다."""
+    # 토픽 후보 검색은 cause 임베딩으로 먼저 좁히고, 최종 판단만 LLM에 맡긴다.
+    cause_query_embedding = to_vector_literal(embed_query(cause))
+    candidates = topic_causes.search_candidates(
+        conn,
+        cause_query_embedding,
+        ev.category,
+        DISTANCE_THRESHOLD,
+        top_k,
+    )
+    action, decision = _resolve_action(
+        client,
+        candidates,
+        lambda: build_topic_assignment_prompt(ev.title, ev.summary, cause, result, candidates),
+        fallback_title=ev.title,
+    )
+
+    result_embedding = to_vector_literal(embed_passage(result))
+    cause_embedding = (
+        to_vector_literal(embed_passage(cause)) if action == "create" else None
+    )
+
+    topic_update = None
+    chosen = None
+    if action == "assign":
+        chosen = _select_candidate(decision, candidates)
+        topic_update = _generate_topic_update(
+            client,
+            topic_title=chosen.title,
+            event_summaries=_append_event_summary(
+                _load_topic_summary_events(conn, chosen.topic_id),
+                event_id=ev.id,
+                title=ev.title,
+                summary=ev.summary,
+            ),
+            fallback_summary=f"{chosen.summary} {ev.summary}",
+        )
+
+    with conn.transaction():
+        # 5-1. 토픽 확정
+        if action == "create":
+            topic_id = topics.create_topic(
+                conn,
+                ev.category,
+                str(decision["new_title"]).strip(),
+                normalize_summary(ev.summary),
+            )
+        else:
+            topic_id = chosen.topic_id
+            topics.update_topic(
+                conn,
+                topic_id,
+                str(topic_update["title"]).strip(),
+                str(topic_update["summary"]).strip(),
+            )
+
+        # 5-2. 이벤트 ↔ 토픽 매핑 (배정 근거 reason 함께 기록)
+        events.assign_topic(conn, ev.id, topic_id, decision.get("reason"))
+        topic_causes.add_cause(conn, topic_id, result, result_embedding)
+        if action == "create":
+            # 새 토픽은 원인과 결과를 모두 저장해 다음 이벤트 검색 품질을 높인다.
+            topic_causes.add_cause(conn, topic_id, cause, cause_embedding)
+
+        _link_chain(conn, topic_id, ev.id)
+
+    return "create" if action == "create" else f"assign {topic_id}"
+
+
+def _assign_hierarchical(
+    conn, client, ev, cause: str, result: str, top_k: int, subtopic_top_k: int
+) -> str:
+    """계층(부모 토픽 → 서브토픽) 배정.
+
+    1) 부모는 최상위 토픽(roots_only)으로만 후보를 좁혀 assign-or-create.
+    2) 부모가 기존 토픽이면 그 부모 스코프 안에서 서브토픽 assign-or-create.
+       부모가 새로 생성되면 그 아래 서브토픽이 없으므로 후보 0개 → 즉시 서브토픽 create.
+    events.topic_id는 leaf(서브토픽)만 참조하고, 체인도 leaf 단위로 연결한다.
+    """
+    cause_query_embedding = to_vector_literal(embed_query(cause))
+
+    # 1) 부모(최상위) 토픽 결정
+    parent_candidates = topic_causes.search_candidates(
+        conn,
+        cause_query_embedding,
+        ev.category,
+        DISTANCE_THRESHOLD,
+        top_k,
+        roots_only=True,
+    )
+    parent_action, parent_decision = _resolve_action(
+        client,
+        parent_candidates,
+        lambda: build_topic_assignment_prompt(ev.title, ev.summary, cause, result, parent_candidates),
+        fallback_title=ev.title,
+    )
+
+    # 2) 서브토픽 후보 검색 — 부모가 기존 토픽일 때만 부모 스코프로 좁혀 검색한다.
+    parent_chosen = None
+    sub_candidates: list = []
+    if parent_action == "assign":
+        parent_chosen = _select_candidate(parent_decision, parent_candidates)
+        parent_title_ctx = parent_chosen.title
+        parent_summary_ctx = parent_chosen.summary
+        sub_candidates = topic_causes.search_candidates(
+            conn,
+            cause_query_embedding,
+            ev.category,
+            DISTANCE_THRESHOLD,
+            subtopic_top_k,
+            parent_topic_id=parent_chosen.topic_id,
+        )
+    else:
+        # 새 부모: 서브토픽 후보가 없으므로 LLM 호출을 생략하고 즉시 서브토픽 create.
+        parent_title_ctx = str(parent_decision["new_title"]).strip()
+        parent_summary_ctx = normalize_summary(ev.summary)
+
+    sub_action, sub_decision = _resolve_action(
+        client,
+        sub_candidates,
+        lambda: build_subtopic_assignment_prompt(
+            parent_title_ctx,
+            parent_summary_ctx,
+            ev.title,
+            ev.summary,
+            cause,
+            result,
+            sub_candidates,
+        ),
+        fallback_title=ev.title,
+    )
+
+    # 임베딩: result는 항상 저장, cause는 부모·서브 중 하나라도 새로 생성할 때만 필요.
+    result_embedding = to_vector_literal(embed_passage(result))
+    need_cause = parent_action == "create" or sub_action == "create"
+    cause_embedding = to_vector_literal(embed_passage(cause)) if need_cause else None
+
+    # 롤업 LLM 호출은 트랜잭션 밖에서 수행한다(네트워크 호출을 트랜잭션에 가두지 않음).
+    parent_update = None
+    if parent_action == "assign":
+        parent_update = _generate_topic_update(
+            client,
+            topic_title=parent_chosen.title,
+            event_summaries=_append_event_summary(
+                _load_parent_summary_events(conn, parent_chosen.topic_id),
+                event_id=ev.id,
+                title=ev.title,
+                summary=ev.summary,
+            ),
+            fallback_summary=f"{parent_chosen.summary} {ev.summary}",
+        )
+
+    sub_chosen = None
+    sub_update = None
+    if sub_action == "assign":
+        sub_chosen = _select_candidate(sub_decision, sub_candidates)
+        sub_update = _generate_topic_update(
+            client,
+            topic_title=sub_chosen.title,
+            event_summaries=_append_event_summary(
+                _load_topic_summary_events(conn, sub_chosen.topic_id),
+                event_id=ev.id,
+                title=ev.title,
+                summary=ev.summary,
+            ),
+            fallback_summary=f"{sub_chosen.summary} {ev.summary}",
+        )
+
+    with conn.transaction():
+        # 부모 토픽 확정 (parent_topic_id IS NULL인 최상위 토픽)
+        if parent_action == "create":
+            parent_id = topics.create_topic(
+                conn,
+                ev.category,
+                parent_title_ctx,
+                parent_summary_ctx,
+                None,
+            )
+            topic_causes.add_cause(conn, parent_id, result, result_embedding)
+            topic_causes.add_cause(conn, parent_id, cause, cause_embedding)
+        else:
+            parent_id = parent_chosen.topic_id
+            topics.update_topic(
+                conn,
+                parent_id,
+                str(parent_update["title"]).strip(),
+                str(parent_update["summary"]).strip(),
+            )
+            topic_causes.add_cause(conn, parent_id, result, result_embedding)
+
+        # 서브토픽(leaf) 확정 — 위에서 정해진 parent_id 아래에 둔다.
+        if sub_action == "create":
+            sub_id = topics.create_topic(
+                conn,
+                ev.category,
+                str(sub_decision["new_title"]).strip(),
+                normalize_summary(ev.summary),
+                parent_id,
+            )
+            topic_causes.add_cause(conn, sub_id, result, result_embedding)
+            topic_causes.add_cause(conn, sub_id, cause, cause_embedding)
+        else:
+            sub_id = sub_chosen.topic_id
+            topics.update_topic(
+                conn,
+                sub_id,
+                str(sub_update["title"]).strip(),
+                str(sub_update["summary"]).strip(),
+            )
+            topic_causes.add_cause(conn, sub_id, result, result_embedding)
+
+        # events.topic_id는 leaf(서브토픽)만 참조하고, 체인도 leaf 단위로 연결한다.
+        events.assign_topic(conn, ev.id, sub_id, sub_decision.get("reason"))
+        _link_chain(conn, sub_id, ev.id)
+
+    parent_label = "create" if parent_action == "create" else f"assign {parent_id}"
+    sub_label = "create" if sub_action == "create" else f"assign {sub_id}"
+    return f"parent {parent_label} / sub {sub_label} (leaf {sub_id})"
+
+
+def run(
+    conn,
+    min_net: int,
+    batch_size: int,
+    top_k: int,
+    llm_model: str,
+    *,
+    subtopics_enabled: bool = False,
+    subtopic_top_k: int | None = None,
+) -> int:
+    """미분류 이벤트를 기존 토픽에 배정하거나 새 토픽으로 생성한다.
+
+    subtopics_enabled=True면 부모 토픽 → 서브토픽 2단계 계층으로 배정한다.
+    subtopic_top_k가 None이면 top_k와 동일하게 동작한다.
+    """
     client = _get_client(llm_model)
+    if subtopic_top_k is None:
+        subtopic_top_k = top_k
 
     batch = events.fetch_unassigned(conn, min_net, batch_size)
     if not batch:
         print("[topic] 미배정 이벤트 없음")
         return 0
 
-    print(f"[topic] 배치 시작: {len(batch)}건")
+    mode = "계층(서브토픽)" if subtopics_enabled else "평면"
+    print(f"[topic] 배치 시작: {len(batch)}건 (모드: {mode})")
     processed = 0
     for ev in batch:
         try:
@@ -150,113 +471,15 @@ def run(conn, min_net: int, batch_size: int, top_k: int, llm_model: str) -> int:
             if not cause or not result:
                 raise ValueError("LLM returned empty cause/result.")
 
-            # 토픽 후보 검색은 cause 임베딩으로 먼저 좁히고, 최종 판단만 LLM에 맡긴다.
-            cause_query_embedding = to_vector_literal(embed_query(cause))
-            candidates = topic_causes.search_candidates(
-                conn,
-                cause_query_embedding,
-                ev.category,
-                DISTANCE_THRESHOLD,
-                top_k,
-            )
-            if candidates:
-                decision = _call_json(
-                    client,
-                    build_topic_assignment_prompt(
-                        ev.title,
-                        ev.summary,
-                        cause,
-                        result,
-                        candidates,
-                    ),
-                    required_keys={"action"},
+            if subtopics_enabled:
+                label = _assign_hierarchical(
+                    conn, client, ev, cause, result, top_k, subtopic_top_k
                 )
             else:
-                decision = {
-                    "action": "create",
-                    "new_title": ev.title,
-                    "score": 0.0,
-                    "reason": "검색 후보 없음",
-                }
-
-            # action 값·필수 키·topic_id 유효성 검증 (트랜잭션 진입 전)
-            action = decision["action"]
-            if action not in {"assign", "create"}:
-                raise ValueError(f"Invalid topic action from LLM: {action!r}")
-            if action == "assign" and (
-                _load_decision_score(decision) < ASSIGN_SCORE_THRESHOLD
-                or _reason_rejects_assignment(decision.get("reason"))
-            ):
-                decision = {
-                    "action": "create",
-                    "new_title": ev.title,
-                    "score": _load_decision_score(decision),
-                    "reason": (
-                        "기존 후보와 직접 상관관계가 없다는 배정 사유가 감지되어 "
-                        "새 토픽으로 생성"
-                    ),
-                }
-                action = "create"
-
-            result_embedding = to_vector_literal(embed_passage(result))
-            cause_embedding = (
-                to_vector_literal(embed_passage(cause)) if action == "create" else None
-            )
-
-            topic_update = None
-            chosen = None
-            if action == "assign":
-                topic_id = int(decision["topic_id"])
-                candidate_ids = {candidate.topic_id for candidate in candidates}
-                if topic_id not in candidate_ids:
-                    raise ValueError(f"LLM selected unknown topic_id={topic_id}.")
-                chosen = next(candidate for candidate in candidates if candidate.topic_id == topic_id)
-                topic_update = _generate_topic_update(
-                    client,
-                    topic_title=chosen.title,
-                    event_summaries=_append_event_summary(
-                        _load_topic_summary_events(conn, topic_id),
-                        event_id=ev.id,
-                        title=ev.title,
-                        summary=ev.summary,
-                    ),
-                    fallback_summary=f"{chosen.summary} {ev.summary}",
-                )
-
-            with conn.transaction():
-                # 5-1. 토픽 확정
-                if action == "create":
-                    topic_id = topics.create_topic(
-                        conn,
-                        ev.category,
-                        str(decision["new_title"]).strip(),
-                        normalize_summary(ev.summary),
-                    )
-                else:
-                    topics.update_topic(
-                        conn,
-                        topic_id,
-                        str(topic_update["title"]).strip(),
-                        str(topic_update["summary"]).strip(),
-                    )
-
-                # 5-2. 이벤트 ↔ 토픽 매핑 (배정 근거 reason 함께 기록)
-                events.assign_topic(conn, ev.id, topic_id, decision.get("reason"))
-                topic_causes.add_cause(conn, topic_id, result, result_embedding)
-                if action == "create":
-                    # 새 토픽은 원인과 결과를 모두 저장해 다음 이벤트 검색 품질을 높인다.
-                    topic_causes.add_cause(conn, topic_id, cause, cause_embedding)
-
-                prev = events.find_prev_event(conn, topic_id, ev.id)
-                if prev is not None:
-                    prev_id, next_id = prev["id"], prev["next_event_id"]
-                else:
-                    prev_id, next_id = None, events.find_next_event_id(conn, topic_id, ev.id)
-                events.link_into_chain(conn, ev.id, prev_id, next_id)
+                label = _assign_flat(conn, client, ev, cause, result, top_k)
 
             processed += 1
-            action_label = "create" if action == "create" else f"assign {topic_id}"
-            print(f"[topic] event {ev.id} -> {action_label}")
+            print(f"[topic] event {ev.id} -> {label}")
 
         except Exception as exc:
             print(f"[topic] event {ev.id} failed: {exc}", file=sys.stderr)

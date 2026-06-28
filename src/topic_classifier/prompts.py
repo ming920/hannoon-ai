@@ -85,6 +85,60 @@ assign은 current cause/result가 후보 토픽의 stored causes와 직접적인
 """
 
 
+def build_subtopic_assignment_prompt(
+    parent_title: str,
+    parent_summary: str,
+    title: str,
+    summary: str,
+    cause: str,
+    result: str,
+    candidates: list[TopicCandidate],
+) -> str:
+    """부모 토픽 컨텍스트 안에서 이벤트를 서브토픽에 배정/생성할지 판단하는 프롬프트.
+
+    후보는 이미 같은 부모 토픽 아래 서브토픽으로만 좁혀져 들어온다.
+    """
+    return f"""다음 뉴스 이벤트가 상위 토픽 안에서 어떤 세부 갈래(서브토픽)에 속하는지 판단하세요.
+
+아래 둘 중 하나의 JSON 객체만 반환하세요:
+- 기존 서브토픽에 배정: {{"action": "assign", "topic_id": 123, "score": 0.93, "reason": "짧은 한국어 이유"}}
+- 새 서브토픽 생성: {{"action": "create", "new_title": "30자 이내 한국어 서브토픽 제목", "score": 0.35, "reason": "짧은 한국어 이유"}}
+
+상위 토픽(이미 이 이벤트가 속하기로 확정된 큰 주제):
+제목: {parent_title}
+요약: {parent_summary}
+
+대상 이벤트:
+제목: {title}
+요약: {summary}
+current cause: {cause}
+current result: {result}
+
+후보 서브토픽(모두 위 상위 토픽 아래에 있음):
+{_format_candidates(candidates)}
+
+판단 규칙:
+- 서브토픽은 상위 토픽 안에서 구분되는 세부 사건·국면·쟁점입니다(예: 상위 "지방선거" → 서브 "당선인", "부정선거 의혹").
+- 대상 이벤트가 후보 서브토픽과 같은 세부 갈래의 연속 전개일 때만 assign 하세요.
+- 같은 상위 토픽에 속한다는 이유만으로 서로 다른 세부 갈래를 assign 하면 안 됩니다.
+- 세부 쟁점·국면·대상이 다르면 새 서브토픽으로 create 하세요.
+- 명확히 같은 세부 갈래인 후보가 없거나 판단이 애매하면 create 하세요.
+- assign하는 경우 topic_id는 반드시 후보 서브토픽에 존재하는 값만 사용하세요.
+- new_title은 상위 토픽명을 반복하지 말고, 그 안에서 이 갈래를 구분하는 "구체적 세부 이슈" 명사구로 작성하세요.
+- new_title은 15~30자 이내 명사구로 작성하고, "~했다", "~됐다", "~한다" 같은 종결형과 마침표를 쓰지 마세요.
+- new_title을 "관련 논란", "기타 이슈"처럼 넓은 표현으로 만들지 마세요.
+- reason은 판단 근거를 한 문장으로 간결하게 작성하세요.
+- 마크다운 코드블록을 사용하지 말고 JSON 객체만 반환하세요.
+- 위 필드 외 추가 필드를 포함하지 마세요.
+
+점수 기준:
+- 0.90~1.00: 같은 세부 갈래의 연속 전개
+- 0.75~0.89: 같은 세부 갈래지만 일부 정보 차이 있음
+- 0.40~0.74: 같은 상위 토픽이지만 별도 세부 갈래
+- 0.00~0.39: 무관하거나 별도 사건
+"""
+
+
 def build_topic_update_prompt(
     old_title: str,
     old_summary: str,
