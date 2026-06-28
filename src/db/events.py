@@ -19,14 +19,14 @@ class Event:
 
 # ── SQL 상수 ────────────────────────────────────────────────────────────────
 
-# 미배정 이벤트 조회: topic_id가 null이고, 실제 기사 수((article_count - abusing_count))가
-# 임계값 이상인 이벤트를 (created_at, id) 기준 오름차순으로 가져온다.
+# 미배정 이벤트 조회: topic_id가 null이고 기사 수가 임계값 이상인 이벤트를
+# (created_at, id) 기준 오름차순으로 가져온다.
 # 순서를 보장해야 prev/next 체인이 시간순으로 연결된다.
 FETCH_UNASSIGNED_SQL = """
 SELECT id, category, title, summary, embedding_text
 FROM events
 WHERE topic_id IS NULL
-  AND (article_count - abusing_count) >= ?
+  AND article_count >= ?
 ORDER BY created_at ASC, id ASC
 LIMIT ?
 """
@@ -79,14 +79,6 @@ ORDER BY distance ASC
 LIMIT ?
 """
 
-UPDATE_EVENT_ABUSING_COUNT_SQL = """
-UPDATE events e
-SET left_count  = CASE WHEN (SELECT bias_type FROM articles WHERE id = ?) = '진보' THEN left_count  + 1 ELSE left_count  END,
-    mid_count   = CASE WHEN (SELECT bias_type FROM articles WHERE id = ?) = '중도' THEN mid_count   + 1 ELSE mid_count   END,
-    right_count = CASE WHEN (SELECT bias_type FROM articles WHERE id = ?) = '보수' THEN right_count + 1 ELSE right_count END
-WHERE e.id = ?
-"""
-
 UPDATE_EVENT_SUMMARY_SQL = """
 UPDATE events
 SET summary = ?,
@@ -103,16 +95,10 @@ INSERT INTO events (
 RETURNING id
 """
 
-# 정상 기사용 관계 테이블 삽입 쿼리
+# 기사-이벤트 관계 테이블 삽입 쿼리
 INSERT_EVENT_ARTICLE_MAP_SQL = """
 INSERT INTO event_articles (event_id, article_id, reason)
 VALUES (?, ?, ?)
-"""
-
-# 어뷰징 기사용 전용 테이블 매핑 쿼리
-INSERT_ABUSING_ARTICLE_MAP_SQL = """
-INSERT INTO abusing_articles (event_id, article_id, type, reason)
-VALUES (?, ?, 'title_content_mismatch'::public.abusing_type, ?)
 """
 
 
@@ -170,12 +156,6 @@ def search_candidate_events(
     )
 
 
-def update_event_counters(conn, event_id: int, article_id: int, is_abusing: bool = False):
-    """어뷰징 기사일 때 언론사 성향별 카운터를 갱신한다."""
-    if is_abusing:
-        conn.execute(UPDATE_EVENT_ABUSING_COUNT_SQL, (article_id, article_id, article_id, event_id))
-
-
 def create_new_event(
     conn,
     category: str,
@@ -216,10 +196,6 @@ def link_article_to_event(
     event_id: int,
     article_id: int,
     reason: str,
-    is_abusing: bool = False,
-):
-    """기사와 이벤트를 정상/어뷰징 매핑 테이블 중 하나에 연결한다."""
-    if is_abusing:
-        conn.execute(INSERT_ABUSING_ARTICLE_MAP_SQL, (event_id, article_id, reason))
-    else:
-        conn.execute(INSERT_EVENT_ARTICLE_MAP_SQL, (event_id, article_id, reason))
+) -> None:
+    """기사와 이벤트를 매핑 테이블에 연결한다."""
+    conn.execute(INSERT_EVENT_ARTICLE_MAP_SQL, (event_id, article_id, reason))

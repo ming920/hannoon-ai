@@ -13,13 +13,11 @@ def process_pending_articles(
     conn,
     *,
     article_model: str,
-    abuse_model: str,
     summary_model: str,
-    abuse_enabled: bool,
     batch_size: int,
     analysis_max_attempts: int = 3,
 ) -> int:
-    """ready 기사에 대해 요약·어뷰징 판단을 LLM으로 수행하고 결과를 저장한다."""
+    """ready 기사에 대해 요약을 LLM으로 수행하고 결과를 저장한다."""
     _validate_args(batch_size=batch_size, analysis_max_attempts=analysis_max_attempts)
 
     analyzer: ArticleLLMAnalyzer | None = None
@@ -44,9 +42,7 @@ def process_pending_articles(
             print(f"[pipeline] job={job_id} article={article_id} link={link} -> start")
 
             existing_summary = row["ai_summary"]
-            existing_label = row["abuse_label"]
-            existing_score = row["abuse_score"]
-            if existing_summary and existing_label in {"abuse", "normal"} and existing_score is not None:
+            if existing_summary:
                 # 재실행 시 이미 분석된 기사는 비용을 다시 쓰지 않고 큐 상태만 정리한다.
                 with conn.transaction():
                     mark_article_job_sent(conn, job_id)
@@ -62,14 +58,11 @@ def process_pending_articles(
                 # 배치에 실제 처리 대상이 있을 때만 클라이언트를 생성해 빈 실행 비용을 피한다.
                 print(
                     "[pipeline] initializing LLM analyzer "
-                    f"(article={article_model}, abuse={abuse_model}, "
-                    f"summary={summary_model}, abuse_enabled={abuse_enabled})"
+                    f"(article={article_model}, summary={summary_model})"
                 )
                 analyzer = ArticleLLMAnalyzer(
                     article_model=article_model,
-                    abuse_model=abuse_model,
                     summary_model=summary_model,
-                    abuse_enabled=abuse_enabled,
                 )
 
             try:
@@ -100,8 +93,6 @@ def process_pending_articles(
                     conn,
                     article_id=article_id,
                     summary=result.summary,
-                    abuse_score=result.abuse_score,
-                    abuse_label=result.abuse_label,
                     keywords=result.keywords,
                     status="done",
                 )
@@ -111,7 +102,6 @@ def process_pending_articles(
                 "[pipeline] "
                 f"job={job_id} article={article_id} -> "
                 f"summary=saved chars={len(result.summary)} "
-                f"abuse={result.abuse_label}:{result.abuse_score:.3f} "
                 "job_status=sent"
             )
             completed += 1

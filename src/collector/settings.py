@@ -17,13 +17,6 @@ DEFAULT_DOMAIN_DELAY = 2.0
 DEFAULT_LLM_MODEL = os.environ.get("LLM_DEFAULT_MODEL", "solar-mini")
 DEFAULT_LLM_CLEANUP_MODEL = os.environ.get("LLM_CLEANUP_MODEL", DEFAULT_LLM_MODEL)
 DEFAULT_LLM_ARTICLE_MODEL = os.environ.get("LLM_ARTICLE_MODEL", DEFAULT_LLM_MODEL)
-DEFAULT_LLM_ABUSE_MODEL = os.environ.get("LLM_ABUSE_MODEL", DEFAULT_LLM_ARTICLE_MODEL)
 DEFAULT_LLM_SUMMARY_MODEL = os.environ.get("LLM_SUMMARY_MODEL", DEFAULT_LLM_ARTICLE_MODEL)
-DEFAULT_LLM_ABUSE_ENABLED = os.environ.get("LLM_ABUSE_ENABLED", "false").strip().lower() in {
-    "1",
-    "true",
-    "yes",
-    "on",
-}
 
 USER_AGENT = "NoiseFreeRSSBot/0.1 (+https://example.invalid)"

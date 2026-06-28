@@ -270,8 +270,6 @@ def ensure_sqlite_db(db_path: str) -> "SqliteConnection":
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             article_id INTEGER UNIQUE REFERENCES articles(id) ON DELETE CASCADE,
             summary TEXT,
-            abuse_score REAL,
-            abuse_label TEXT,
             keywords TEXT,
             status TEXT,
             last_error TEXT,
@@ -357,8 +355,6 @@ def _validate_postgres_schema(conn: PostgresConnection) -> None:
             "id",
             "article_id",
             "summary",
-            "abuse_score",
-            "abuse_label",
             "keywords",
             "status",
             "last_error",
@@ -521,7 +517,7 @@ def enqueue_article_job(conn, article_id: int) -> None:
 
 
 def load_pending_ai_pipeline_jobs(conn, limit: int) -> list:
-    """어뷰징 분류와 요약을 기사 단위로 이어서 처리할 ready 기사를 가져온다."""
+    """요약을 기사 단위로 이어서 처리할 ready 기사를 가져온다."""
     if limit <= 0:
         raise ValueError("limit must be greater than 0.")
     return conn.query(
@@ -535,8 +531,6 @@ def load_pending_ai_pipeline_jobs(conn, limit: int) -> list:
             articles.category AS category,
             articles.content AS content,
             articles.link AS link,
-            article_ai_results.abuse_score AS abuse_score,
-            article_ai_results.abuse_label AS abuse_label,
             article_ai_results.summary AS ai_summary
         FROM article_jobs
         JOIN articles ON articles.id = article_jobs.article_id
@@ -557,12 +551,10 @@ def save_article_analysis_result(
     *,
     article_id: int,
     summary: str,
-    abuse_score: float,
-    abuse_label: str,
     keywords: list[str] | str | None,
     status: str = "done",
 ) -> None:
-    """LLM 기사 분석 결과 전체를 article_ai_results에 저장한다."""
+    """LLM 기사 분석 결과를 article_ai_results에 저장한다."""
     now = now_iso()
     summary = normalize_summary(summary)
     if not summary:
@@ -573,18 +565,14 @@ def save_article_analysis_result(
         INSERT INTO article_ai_results (
             article_id,
             summary,
-            abuse_score,
-            abuse_label,
             keywords,
             status,
             last_error,
             created_at,
             updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(article_id) DO UPDATE SET
             summary = excluded.summary,
-            abuse_score = excluded.abuse_score,
-            abuse_label = excluded.abuse_label,
             keywords = excluded.keywords,
             status = excluded.status,
             last_error = excluded.last_error,
@@ -593,8 +581,6 @@ def save_article_analysis_result(
         (
             article_id,
             summary,
-            abuse_score,
-            abuse_label,
             stored_keywords,
             status,
             None,

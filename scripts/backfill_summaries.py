@@ -77,23 +77,14 @@ WHERE id = ?
 """
 
 EVENT_ARTICLE_SUMMARIES_SQL = """
-SELECT article_id, title, summary
-FROM (
-    SELECT a.id AS article_id, a.title AS title, r.summary AS summary
-    FROM event_articles ea
-    JOIN articles a ON a.id = ea.article_id
-    JOIN article_ai_results r ON r.article_id = a.id
-    WHERE ea.event_id = ?
-    UNION
-    SELECT a.id AS article_id, a.title AS title, r.summary AS summary
-    FROM abusing_articles aa
-    JOIN articles a ON a.id = aa.article_id
-    JOIN article_ai_results r ON r.article_id = a.id
-    WHERE aa.event_id = ?
-) source
-WHERE summary IS NOT NULL
-  AND btrim(summary) <> ''
-ORDER BY article_id ASC
+SELECT a.id AS article_id, a.title AS title, r.summary AS summary
+FROM event_articles ea
+JOIN articles a ON a.id = ea.article_id
+JOIN article_ai_results r ON r.article_id = a.id
+WHERE ea.event_id = ?
+  AND r.summary IS NOT NULL
+  AND btrim(r.summary) <> ''
+ORDER BY a.id ASC
 """
 
 TOPIC_SUMMARY_TARGETS_SQL = f"""
@@ -248,7 +239,7 @@ def _rollup_event_summary(conn, client: LLMClient, row) -> str:
             "title": item["title"],
             "summary": normalize_summary(item["summary"]),
         }
-        for item in conn.query(EVENT_ARTICLE_SUMMARIES_SQL, (row["id"], row["id"]))
+        for item in conn.query(EVENT_ARTICLE_SUMMARIES_SQL, (row["id"],))
         if normalize_summary(item["summary"])
     ]
     if len(article_summaries) <= 1:

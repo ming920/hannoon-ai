@@ -114,23 +114,14 @@ def _build_event_embedding_text(
 
 
 FETCH_EVENT_SUMMARY_ARTICLES_SQL = """
-SELECT article_id, title, summary
-FROM (
-    SELECT a.id AS article_id, a.title AS title, r.summary AS summary
-    FROM event_articles ea
-    JOIN articles a ON a.id = ea.article_id
-    JOIN article_ai_results r ON r.article_id = a.id
-    WHERE ea.event_id = ?
-    UNION
-    SELECT a.id AS article_id, a.title AS title, r.summary AS summary
-    FROM abusing_articles aa
-    JOIN articles a ON a.id = aa.article_id
-    JOIN article_ai_results r ON r.article_id = a.id
-    WHERE aa.event_id = ?
-) source
-WHERE summary IS NOT NULL
-  AND btrim(summary) <> ''
-ORDER BY article_id ASC
+SELECT a.id AS article_id, a.title AS title, r.summary AS summary
+FROM event_articles ea
+JOIN articles a ON a.id = ea.article_id
+JOIN article_ai_results r ON r.article_id = a.id
+WHERE ea.event_id = ?
+  AND r.summary IS NOT NULL
+  AND btrim(r.summary) <> ''
+ORDER BY a.id ASC
 """
 
 
@@ -159,7 +150,7 @@ def _load_event_summary_articles(conn, event_id: int) -> list[dict]:
             "title": row["title"],
             "summary": normalize_summary(row["summary"]),
         }
-        for row in conn.query(FETCH_EVENT_SUMMARY_ARTICLES_SQL, (event_id, event_id))
+        for row in conn.query(FETCH_EVENT_SUMMARY_ARTICLES_SQL, (event_id,))
         if normalize_summary(row["summary"])
     ]
 
@@ -216,8 +207,7 @@ def process_event_classification(
             row = conn.query_one(
                 """
                 SELECT a.id, a.title, a.content, a.published_at, a.category,
-                       a.article_image_url, a.bias_type, r.summary AS ai_summary,
-                       r.abuse_label
+                       a.article_image_url, a.bias_type, r.summary AS ai_summary
                 FROM articles a
                 JOIN article_ai_results r ON a.id = r.article_id
                 WHERE a.id = ?
@@ -229,8 +219,7 @@ def process_event_classification(
             done_articles = conn.query(
                 """
                 SELECT a.id, a.title, a.content, a.published_at, a.category,
-                       a.article_image_url, a.bias_type, r.summary AS ai_summary,
-                       r.abuse_label
+                       a.article_image_url, a.bias_type, r.summary AS ai_summary
                 FROM articles a
                 JOIN article_ai_results r ON a.id = r.article_id
                 WHERE r.status = 'done'
@@ -251,8 +240,6 @@ def process_event_classification(
             category = art["category"]
             img_url = art["article_image_url"]
             ai_summary = str(art["ai_summary"] or "").strip()
-            abuse_label = art["abuse_label"]
-            is_abusing = abuse_label == "abuse"
 
             trimmed_content = _get_first_sentences(full_content)
             event_source_text = _build_event_source_text(
@@ -365,20 +352,12 @@ def process_event_classification(
                     if action == "assign":
                         assert event_id is not None
                         assert event_summary is not None
-                        if is_abusing:
-                            events.update_event_counters(
-                                conn,
-                                event_id=event_id,
-                                article_id=art_id,
-                                is_abusing=True,
-                            )
                         reason = str(decision.get("reason") or "llm_event_assignment")
                         events.link_article_to_event(
                             conn,
                             event_id,
                             art_id,
                             reason,
-                            is_abusing=is_abusing,
                         )
                         events.update_event_summary(conn, event_id, event_summary)
                         msg = f"assigned to event {event_id}"
@@ -396,19 +375,11 @@ def process_event_classification(
                             embedding_literal=article_embedding,
                             event_image_url=img_url,
                         )
-                        if is_abusing:
-                            events.update_event_counters(
-                                conn,
-                                event_id=new_id,
-                                article_id=art_id,
-                                is_abusing=True,
-                            )
                         events.link_article_to_event(
                             conn,
                             new_id,
                             art_id,
                             str(decision.get("reason") or "new_event"),
-                            is_abusing=is_abusing,
                         )
                         msg = f"created event {new_id}"
 
@@ -418,7 +389,6 @@ def process_event_classification(
                     json.dumps(
                         {
                             "article_id": art_id,
-                            "abuse_label": abuse_label,
                             "main_event": main_event,
                             "result": msg,
                         },
