@@ -48,6 +48,28 @@ python classify_topics.py --database-url "postgresql://..."
 python classify_topics.py
 ```
 
+## 서브토픽(계층) 분류
+
+`--subtopics`(또는 `TOPIC_SUBTOPICS_ENABLED=true`)로 토픽 아래 서브토픽 2단계 계층
+분류를 켤 수 있습니다. 켜면 처리 흐름이 다음과 같이 확장됩니다.
+
+1. 부모(최상위) 토픽을 `parent_topic_id IS NULL` 후보로만 좁혀 assign-or-create 합니다.
+2. 부모가 기존 토픽이면 그 부모 스코프 안에서 서브토픽 후보를 검색해 assign-or-create
+   합니다. 부모를 새로 만들면 그 아래 서브토픽이 없으므로 LLM 호출 없이 서브토픽을
+   바로 생성합니다(후보 0개 → create 패턴 재사용).
+3. `events.topic_id`는 항상 leaf인 서브토픽만 가리키고, prev/next 체인도 서브토픽
+   단위로 연결됩니다. 부모는 `topics.parent_topic_id` 자기참조로 재귀 조회합니다.
+
+관련 설정:
+
+```env
+TOPIC_SUBTOPICS_ENABLED=true
+TOPIC_SUBTOPIC_CANDIDATE_LIMIT=12
+```
+
+서브토픽 기능은 `topics.parent_topic_id` 컬럼이 필요하므로
+`migrations/0001_topics_parent_topic_id.sql`을 운영 DB에 먼저 적용해야 합니다.
+
 ## 주의사항
 
 - 토픽 분류는 pgvector 검색이 필요하므로 Supabase/Postgres 연결이 필수입니다.

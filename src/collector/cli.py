@@ -12,8 +12,6 @@ from .settings import (
     DEFAULT_DB,
     DEFAULT_DOMAIN_DELAY,
     DEFAULT_FEEDS_FILE,
-    DEFAULT_LLM_ABUSE_ENABLED,
-    DEFAULT_LLM_ABUSE_MODEL,
     DEFAULT_LLM_ARTICLE_MODEL,
     DEFAULT_LLM_CLEANUP_MODEL,
     DEFAULT_LLM_SUMMARY_MODEL,
@@ -75,27 +73,9 @@ def add_common_args(parser: argparse.ArgumentParser) -> None:
         help="기사 분석 기본 LLM 모델",
     )
     parser.add_argument(
-        "--llm-abuse-model",
-        default=DEFAULT_LLM_ABUSE_MODEL,
-        help="어뷰징 판단에 사용할 LLM 모델",
-    )
-    parser.add_argument(
         "--llm-summary-model",
         default=DEFAULT_LLM_SUMMARY_MODEL,
         help="기사 요약에 사용할 LLM 모델",
-    )
-    parser.set_defaults(llm_abuse_enabled=DEFAULT_LLM_ABUSE_ENABLED)
-    parser.add_argument(
-        "--llm-abuse",
-        dest="llm_abuse_enabled",
-        action="store_true",
-        help="기사 분석 단계에서 어뷰징 판단을 수행합니다.",
-    )
-    parser.add_argument(
-        "--no-llm-abuse",
-        dest="llm_abuse_enabled",
-        action="store_false",
-        help="기사 분석 단계에서 어뷰징 판단을 건너뛰고 normal로 저장합니다.",
     )
     parser.add_argument("--domain-delay", type=float, default=DEFAULT_DOMAIN_DELAY)
     parser.add_argument("--offline", action="store_true", help="http/https URL 요청을 건너뜀")
@@ -169,9 +149,7 @@ def main() -> int:
             processed = process_pending_articles(
                 conn,
                 article_model=args.llm_article_model,
-                abuse_model=args.llm_abuse_model,
                 summary_model=args.llm_summary_model,
-                abuse_enabled=args.llm_abuse_enabled,
                 batch_size=args.ai_batch_size,
                 analysis_max_attempts=args.analysis_max_attempts,
             )

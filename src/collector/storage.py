@@ -176,16 +176,27 @@ class SqliteConnection:
         self.close()
 
 
-def ensure_db(db_path: str, database_url: str | None = None):
+def ensure_db(
+    db_path: str,
+    database_url: str | None = None,
+    *,
+    require_classifier_schema: bool = False,
+):
     """실행 환경에 맞는 DB 연결을 만든다.
 
     - `database_url`이 있으면 Supabase/Postgres를 운영 DB로 사용한다.
       운영 DB 스키마는 별도 migration 흐름에서 관리하므로
       애플리케이션 시작 시 CREATE/ALTER TABLE을 실행하지 않는다.
     - 없으면 SQLite 파일을 사용한다. 이 경로는 로컬 개발과 테스트용이다.
+
+    `require_classifier_schema=True`면 이벤트/토픽 분류기가 의존하는 테이블·컬럼
+    (events/topics/topic_causes/event_articles + pgvector 컬럼)까지 시작 시점에 검증한다.
+    분류기 진입점(classify_events.py / classify_topics.py)이 이 플래그를 켠다.
     """
     if database_url:
-        return ensure_postgres_db(database_url)
+        return ensure_postgres_db(
+            database_url, require_classifier_schema=require_classifier_schema
+        )
     return ensure_sqlite_db(db_path)
 
 
@@ -270,8 +281,6 @@ def ensure_sqlite_db(db_path: str) -> "SqliteConnection":
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             article_id INTEGER UNIQUE REFERENCES articles(id) ON DELETE CASCADE,
             summary TEXT,
-            abuse_score REAL,
-            abuse_label TEXT,
             keywords TEXT,
             status TEXT,
             last_error TEXT,
@@ -283,12 +292,18 @@ def ensure_sqlite_db(db_path: str) -> "SqliteConnection":
     return SqliteConnection(conn)
 
 
-def ensure_postgres_db(database_url: str) -> PostgresConnection:
+def ensure_postgres_db(
+    database_url: str,
+    *,
+    require_classifier_schema: bool = False,
+) -> PostgresConnection:
     """Supabase/Postgres DB에 연결하고 migration 적용 여부만 확인한다.
 
     Supabase 운영 스키마는 이 수집기 코드에서 만들지 않는다. 여기서 DDL을 실행하면
     운영 DB migration 히스토리와 애플리케이션 코드 변경 이력이 어긋날 수 있으므로,
     앱은 테이블을 만들지 않고 필요한 테이블/컬럼이 없을 때 명확히 실패한다.
+
+    `require_classifier_schema=True`면 분류기 전용 테이블·컬럼과 pgvector 차원까지 검증한다.
     """
     if psycopg is None:
         raise RuntimeError("psycopg is required for Supabase/Postgres. Install requirements.txt first.")
@@ -298,7 +313,9 @@ def ensure_postgres_db(database_url: str) -> PostgresConnection:
     # 항상 트랜잭션을 소유(BEGIN/COMMIT)한다. 단발 쓰기는 즉시 커밋된다.
     conn = PostgresConnection(psycopg.connect(database_url, row_factory=dict_row, autocommit=True))
     try:
-        _validate_postgres_schema(conn)
+        _validate_postgres_schema(conn, _required_columns_for(require_classifier_schema))
+        if require_classifier_schema:
+            _validate_vector_dimensions(conn)
         return conn
     except Exception:
         conn.close()
@@ -312,66 +329,155 @@ def _ensure_column(conn: sqlite3.Connection, table: str, column: str, column_typ
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {column_type}")
 
 
-def _validate_postgres_schema(conn: PostgresConnection) -> None:
-    """운영 DB에 필요한 migration이 적용됐는지 DDL 없이 검증한다."""
-    required_columns = {
-        "feeds": {
-            "url",
-            "category",
-            "publisher",
-            "bias_type",
-            "title",
-            "etag",
-            "modified_at",
-            "last_checked",
-        },
-        "articles": {
-            "id",
-            "feed_url",
-            "guid",
-            "link",
-            "category",
-            "title",
-            "publisher",
-            "bias_type",
-            "published_at",
-            "summary",
-            "content",
-            "article_image_url",
-            "content_source",
-            "status",
-            "created_at",
-            "updated_at",
-        },
-        "article_jobs": {
-            "id",
-            "article_id",
-            "status",
-            "attempts",
-            "last_error",
-            "last_attempt_at",
-            "created_at",
-            "updated_at",
-        },
-        "article_ai_results": {
-            "id",
-            "article_id",
-            "summary",
-            "abuse_score",
-            "abuse_label",
-            "keywords",
-            "status",
-            "last_error",
-            "created_at",
-            "updated_at",
-        },
-    }
+# 운영 Postgres에 있어야 하는 테이블별 컬럼.
+# 수집기 경로(SQLite도 지원)가 요구하는 최소 스키마.
+COLLECTOR_REQUIRED_COLUMNS = {
+    "feeds": {
+        "url",
+        "category",
+        "publisher",
+        "bias_type",
+        "title",
+        "etag",
+        "modified_at",
+        "last_checked",
+    },
+    "articles": {
+        "id",
+        "feed_url",
+        "guid",
+        "link",
+        "category",
+        "title",
+        "publisher",
+        "bias_type",
+        "published_at",
+        "summary",
+        "content",
+        "article_image_url",
+        "content_source",
+        "status",
+        "created_at",
+        "updated_at",
+    },
+    "article_jobs": {
+        "id",
+        "article_id",
+        "status",
+        "attempts",
+        "last_error",
+        "last_attempt_at",
+        "created_at",
+        "updated_at",
+    },
+    "article_ai_results": {
+        "id",
+        "article_id",
+        "summary",
+        "keywords",
+        "status",
+        "last_error",
+        "created_at",
+        "updated_at",
+    },
+}
 
+# 이벤트/토픽 분류기가 추가로 요구하는 테이블·컬럼(Postgres + pgvector 전용).
+# 이 컬럼들이 없으면 분류기가 배치 도중이 아니라 시작 시점에 명확히 실패해야 한다.
+# (db.events / db.topics / db.topic_causes / event_classifier / topic_classifier가 의존)
+CLASSIFIER_REQUIRED_COLUMNS = {
+    "articles": {"embedding", "core_content"},
+    "events": {
+        "id",
+        "topic_id",
+        "category",
+        "title",
+        "summary",
+        "embedding_text",
+        "core_content",
+        "reason",
+        "prev_event_id",
+        "next_event_id",
+        "article_count",
+        "event_image_url",
+        "embedding",
+        "created_at",
+        "updated_at",
+    },
+    "event_articles": {"id", "event_id", "article_id", "reason"},
+    "topics": {
+        "id",
+        "category",
+        "title",
+        "summary",
+        "parent_topic_id",
+        "created_at",
+        "updated_at",
+    },
+    "topic_causes": {"id", "topic_id", "cause_text", "cause_embedding"},
+}
+
+# 분류기 경로에서 차원까지 확인할 pgvector 컬럼. 과거 768↔4096 드리프트가 실제 사고였다.
+EXPECTED_VECTOR_DIMENSIONS = {
+    ("articles", "embedding"): 4096,
+    ("events", "embedding"): 4096,
+    ("topic_causes", "cause_embedding"): 4096,
+}
+
+
+def _required_columns_for(require_classifier_schema: bool) -> dict:
+    """검증 대상 테이블→컬럼 집합을 구성한다.
+
+    분류기 경로면 수집기 스키마에 분류기 스키마를 합집합으로 더한다.
+    """
+    merged = {table: set(columns) for table, columns in COLLECTOR_REQUIRED_COLUMNS.items()}
+    if require_classifier_schema:
+        for table, columns in CLASSIFIER_REQUIRED_COLUMNS.items():
+            merged.setdefault(table, set()).update(columns)
+    return merged
+
+
+def _validate_vector_dimensions(conn: PostgresConnection) -> None:
+    """pgvector 컬럼의 차원이 기대값과 같은지 best-effort로 확인한다.
+
+    pgvector는 `atttypmod`에 차원을 그대로 저장한다(미지정이면 -1). 차원을 읽지 못하면
+    조용히 건너뛰어 오탐으로 시작을 막지 않고, 양성으로 다른 차원이 확인될 때만 실패한다.
+    """
+    for (table, column), expected_dim in EXPECTED_VECTOR_DIMENSIONS.items():
+        rows = conn.query(
+            """
+            SELECT a.atttypmod AS typmod
+            FROM pg_attribute a
+            JOIN pg_class c ON c.oid = a.attrelid
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = 'public'
+              AND c.relname = ?
+              AND a.attname = ?
+              AND a.attnum > 0
+              AND NOT a.attisdropped
+            """,
+            (table, column),
+        )
+        if not rows:
+            continue
+        dim = rows[0]["typmod"]
+        if dim is None or dim < 0:
+            continue
+        if dim != expected_dim:
+            raise RuntimeError(
+                f"Supabase/Postgres column '{table}.{column}' has vector dimension {dim}, "
+                f"expected {expected_dim}. Re-apply the embedding-dimension migration "
+                "and regenerate embeddings before running the classifier."
+            )
+
+
+def _validate_postgres_schema(conn: PostgresConnection, required_columns: dict) -> None:
+    """운영 DB에 필요한 migration이 적용됐는지 DDL 없이 검증한다."""
     table_names = tuple(required_columns)
     table_placeholders = ", ".join("?" for _ in table_names)
     existing_tables = {
         row["table_name"]
-        for row in conn.execute(
+        for row in conn.query(
             f"""
             SELECT table_name
             FROM information_schema.tables
@@ -379,7 +485,7 @@ def _validate_postgres_schema(conn: PostgresConnection) -> None:
               AND table_name IN ({table_placeholders})
             """,
             table_names,
-        ).fetchall()
+        )
     }
     missing_tables = sorted(set(table_names) - existing_tables)
     if missing_tables:
@@ -392,7 +498,7 @@ def _validate_postgres_schema(conn: PostgresConnection) -> None:
     for table, columns in required_columns.items():
         existing_columns = {
             row["column_name"]
-            for row in conn.execute(
+            for row in conn.query(
                 """
                 SELECT column_name
                 FROM information_schema.columns
@@ -400,7 +506,7 @@ def _validate_postgres_schema(conn: PostgresConnection) -> None:
                   AND table_name = ?
                 """,
                 (table,),
-            ).fetchall()
+            )
         }
         missing_columns = sorted(columns - existing_columns)
         if missing_columns:
@@ -521,7 +627,7 @@ def enqueue_article_job(conn, article_id: int) -> None:
 
 
 def load_pending_ai_pipeline_jobs(conn, limit: int) -> list:
-    """어뷰징 분류와 요약을 기사 단위로 이어서 처리할 ready 기사를 가져온다."""
+    """요약을 기사 단위로 이어서 처리할 ready 기사를 가져온다."""
     if limit <= 0:
         raise ValueError("limit must be greater than 0.")
     return conn.query(
@@ -535,8 +641,6 @@ def load_pending_ai_pipeline_jobs(conn, limit: int) -> list:
             articles.category AS category,
             articles.content AS content,
             articles.link AS link,
-            article_ai_results.abuse_score AS abuse_score,
-            article_ai_results.abuse_label AS abuse_label,
             article_ai_results.summary AS ai_summary
         FROM article_jobs
         JOIN articles ON articles.id = article_jobs.article_id
@@ -557,12 +661,10 @@ def save_article_analysis_result(
     *,
     article_id: int,
     summary: str,
-    abuse_score: float,
-    abuse_label: str,
     keywords: list[str] | str | None,
     status: str = "done",
 ) -> None:
-    """LLM 기사 분석 결과 전체를 article_ai_results에 저장한다."""
+    """LLM 기사 분석 결과를 article_ai_results에 저장한다."""
     now = now_iso()
     summary = normalize_summary(summary)
     if not summary:
@@ -573,18 +675,14 @@ def save_article_analysis_result(
         INSERT INTO article_ai_results (
             article_id,
             summary,
-            abuse_score,
-            abuse_label,
             keywords,
             status,
             last_error,
             created_at,
             updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(article_id) DO UPDATE SET
             summary = excluded.summary,
-            abuse_score = excluded.abuse_score,
-            abuse_label = excluded.abuse_label,
             keywords = excluded.keywords,
             status = excluded.status,
             last_error = excluded.last_error,
@@ -593,8 +691,6 @@ def save_article_analysis_result(
         (
             article_id,
             summary,
-            abuse_score,
-            abuse_label,
             stored_keywords,
             status,
             None,

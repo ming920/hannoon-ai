@@ -22,10 +22,13 @@ class TopicCandidate:
 # ── SQL 상수 ────────────────────────────────────────────────────────────────
 
 # 원인 임베딩 코사인 거리로 관련 토픽을 검색한다.
-# 카테고리 구분 없이 전체 토픽을 대상으로 유사도 검색한다.
+# 후보는 같은 category 내 토픽으로 한정한다(WHERE t.category = ?::category).
+# 이는 배정 검증을 강화해 서로 다른 분야 토픽이 잘못 병합되는 것을 막기 위한
+# 의도된 제약이다(커밋 acae22b "토픽 후보 검색과 배정 검증 강화" 참고).
 # 벡터 바인딩은 '[f1,f2,...]' 문자열 + ?::vector 캐스트 방식을 사용한다.
 # (storage.py의 PostgresConnection이 register_vector를 호출하지 않으므로)
-SEARCH_SQL = """
+# {parent_predicate}에는 계층 분류용 부모 스코프 조건이 주입된다(없으면 빈 문자열).
+SEARCH_SQL_TEMPLATE = """
 WITH matched AS (
     SELECT t.id AS topic_id,
            t.category AS topic_category,
@@ -37,7 +40,7 @@ WITH matched AS (
     JOIN topics t ON t.id = tc.topic_id
     WHERE tc.cause_embedding IS NOT NULL
       AND t.category = ?::category
-      AND (tc.cause_embedding <=> ?::vector) <= ?
+      AND (tc.cause_embedding <=> ?::vector) <= ?{parent_predicate}
 ),
 ranked AS (
     SELECT *,
@@ -67,6 +70,9 @@ WHERE topic_rank <= ?
 ORDER BY topic_rank ASC, cause_rank ASC
 """
 
+# 하위 호환: 부모 스코프 없이 전체 토픽을 검색하는 평면 모드 SQL.
+SEARCH_SQL = SEARCH_SQL_TEMPLATE.format(parent_predicate="")
+
 # 이벤트의 '결과(result)'를 topic_causes에 적재한다.
 # 컬럼명은 cause_text이지만, 여기에는 이벤트 result를 저장한다.
 # 이는 "해당 토픽에서 발생한 결과가 향후 유사 사건의 원인으로 작용한다"는
@@ -83,20 +89,36 @@ def search_candidates(
     category: str,
     max_distance: float,
     top_k: int,
+    *,
+    roots_only: bool = False,
+    parent_topic_id: int | None = None,
 ) -> list[TopicCandidate]:
-    """원인 임베딩과 가까운 topic_causes를 찾아 토픽 단위 후보로 묶는다."""
+    """원인 임베딩과 가까운 topic_causes를 찾아 토픽 단위 후보로 묶는다.
+
+    계층 분류용 부모 스코프 옵션(둘 다 지정하면 오류):
+    - roots_only=True: 최상위 토픽(parent_topic_id IS NULL)만 후보로 삼는다.
+    - parent_topic_id=<id>: 해당 부모 아래 서브토픽만 후보로 삼는다.
+    둘 다 생략하면 기존 평면 모드처럼 전체 토픽을 검색한다.
+    """
     if top_k <= 0:
         raise ValueError("top_k must be greater than 0.")
+    if roots_only and parent_topic_id is not None:
+        raise ValueError("roots_only와 parent_topic_id는 동시에 지정할 수 없습니다.")
+
+    # 부모 스코프 조건과 그에 맞는 파라미터를 matched CTE의 WHERE 위치에 주입한다.
+    params: list = [embedding_literal, category, embedding_literal, max_distance]
+    if roots_only:
+        parent_predicate = "\n      AND t.parent_topic_id IS NULL"
+    elif parent_topic_id is not None:
+        parent_predicate = "\n      AND t.parent_topic_id = ?"
+        params.append(parent_topic_id)
+    else:
+        parent_predicate = ""
+    params.extend([top_k, MAX_CAUSES_PER_TOPIC])
+
     rows = conn.query(
-        SEARCH_SQL,
-        (
-            embedding_literal,
-            category,
-            embedding_literal,
-            max_distance,
-            top_k,
-            MAX_CAUSES_PER_TOPIC,
-        ),
+        SEARCH_SQL_TEMPLATE.format(parent_predicate=parent_predicate),
+        tuple(params),
     )
 
     seen: OrderedDict[int, TopicCandidate] = OrderedDict()

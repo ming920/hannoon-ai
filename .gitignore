@@ -10,6 +10,7 @@ data/*.db
 data/*.db-shm
 data/*.db-wal
 팀프로젝트 제안서_김민재_22112043.pdf
+*.pptx
 
 # OMC / Claude Code 런타임 상태 (문서·공유설정은 커밋, 상태/로컬은 무시)
 .omc/

@@ -50,9 +50,7 @@ DATABASE_URL=your_postgres_database_url
 LLM_DEFAULT_MODEL=solar-mini
 LLM_CLEANUP_MODEL=solar-mini
 LLM_ARTICLE_MODEL=solar-mini
-LLM_ABUSE_MODEL=solar-mini
 LLM_SUMMARY_MODEL=solar-mini
-LLM_ABUSE_ENABLED=false
 
 LLM_TOPIC_EVENT_MODEL=solar-pro3
 LLM_EVENT_MODEL=solar-pro3
@@ -99,8 +97,6 @@ python classify_topics.py --database-url "postgresql://..."
 
 - `--no-llm-cleanup`: 크롤링 본문 LLM 정제를 끕니다.
 - `--llm-cleanup-model`: 본문 정제 모델을 지정합니다.
-- `--llm-abuse-model`: 어뷰징 판단 모델을 지정합니다.
-- `--llm-abuse` / `--no-llm-abuse`: 기사 분석 단계의 어뷰징 판단을 켜거나 끕니다.
 - `--llm-summary-model`: 요약 모델을 지정합니다.
 - `--ai-batch-size`: 한 번에 LLM 분석할 기사 수입니다.
 - `--analysis-max-attempts`: 기사 분석 실패 확정 전 재시도 횟수입니다.
@@ -141,7 +137,6 @@ ALTER TABLE topic_causes ADD COLUMN cause_embedding vector(4096);
 - `topics`
 - `topic_causes`
 - `event_articles`
-- `abusing_articles`
 
 현재 애플리케이션은 운영 DB에서 테이블을 자동 생성하지 않습니다. Supabase
 migration에서 스키마를 먼저 적용한 뒤 실행해야 합니다.
@@ -150,10 +145,6 @@ migration에서 스키마를 먼저 적용한 뒤 실행해야 합니다.
 
 - 크롤링 본문 LLM 정제는 광고, 공유 UI, 저작권 문구 등 정제 흔적이 있을 때만 호출합니다.
 - 이벤트/토픽 후보가 없으면 `solar-pro3` 배정 판단을 생략하고 바로 새 항목을 만듭니다.
-- `LLM_ABUSE_ENABLED=false`이면 기사 분석 단계에서 어뷰징 판단을 건너뛰고
-  `normal`로 저장해 요약 처리 성공률을 우선합니다.
-- 어뷰징 판단을 켰고 어뷰징 판단 모델과 요약 모델이 같으면 한 번의 LLM 호출로
-  요약과 어뷰징 판단을 함께 처리합니다.
 
 ## 주요 파일
 

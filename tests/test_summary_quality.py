@@ -11,7 +11,6 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from collector.storage import ensure_sqlite_db, save_article_analysis_result
-from collector.article_llm import ArticleLLMAnalyzer
 from db import events, topics
 from openai_client.client import parse_json_object
 from summary_utils import TOPIC_TITLE_MAX_CHARS, normalize_summary, normalize_topic_title
@@ -72,8 +71,6 @@ class SummaryQualityTests(unittest.TestCase):
                     conn,
                     article_id=1,
                     summary=long_summary,
-                    abuse_score=0.0,
-                    abuse_label="normal",
                     keywords=["keyword"],
                 )
 
@@ -114,32 +111,6 @@ class SummaryQualityTests(unittest.TestCase):
         topics.update_topic(topic_conn, 123, long_title, long_summary)
         self.assertLessEqual(len(topic_conn.execute_params[0]), TOPIC_TITLE_MAX_CHARS)
         self.assertLessEqual(len(topic_conn.execute_params[1]), 700)
-
-    def test_abuse_disabled_skips_abuse_and_keyword_classification(self):
-        class FakeAnalyzer(ArticleLLMAnalyzer):
-            def _summarize(self, *, title, category, content):
-                return "Summary one. Summary two."
-
-            def _classify_abuse(self, **kwargs):
-                raise AssertionError("abuse classification should be skipped")
-
-            def _extract_keywords(self, *, title, summary, content):
-                raise AssertionError("keyword extraction should be skipped")
-
-        analyzer = FakeAnalyzer(abuse_enabled=False)
-
-        result = analyzer.analyze(
-            title="title",
-            subtitle="subtitle",
-            category="사회",
-            content="content",
-        )
-
-        self.assertEqual(result.abuse_label, "normal")
-        self.assertEqual(result.abuse_score, 0.0)
-        self.assertEqual(result.abuse_reason, "abuse_classification_skipped")
-        self.assertEqual(result.keywords, [])
-
 
 if __name__ == "__main__":
     unittest.main()

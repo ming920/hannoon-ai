@@ -9,7 +9,14 @@ from dotenv import load_dotenv
 from collector.settings import DEFAULT_DB
 from collector.storage import ensure_db
 from topic_classifier.pipeline import run
-from topic_classifier.settings import BATCH_SIZE, LLM_MODEL, MIN_NET_ARTICLE_COUNT, TOP_K
+from topic_classifier.settings import (
+    BATCH_SIZE,
+    LLM_MODEL,
+    MIN_NET_ARTICLE_COUNT,
+    SUBTOPIC_TOP_K,
+    SUBTOPICS_ENABLED,
+    TOP_K,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -42,6 +49,25 @@ def build_parser() -> argparse.ArgumentParser:
         default=LLM_MODEL,
         help="토픽 배정에 사용할 LLM 모델",
     )
+    parser.add_argument(
+        "--subtopics",
+        dest="subtopics",
+        action="store_true",
+        default=SUBTOPICS_ENABLED,
+        help="토픽 아래 서브토픽 계층 분류를 활성화한다(기본값은 TOPIC_SUBTOPICS_ENABLED)",
+    )
+    parser.add_argument(
+        "--no-subtopics",
+        dest="subtopics",
+        action="store_false",
+        help="서브토픽 계층 분류를 끄고 기존 평면 토픽 배정만 수행한다",
+    )
+    parser.add_argument(
+        "--subtopic-top-k",
+        type=int,
+        default=SUBTOPIC_TOP_K,
+        help="LLM에 보여줄 부모 토픽 내 서브토픽 후보의 최대 수",
+    )
     return parser
 
 
@@ -58,6 +84,9 @@ def main() -> int:
     if args.top_k <= 0:
         print("--top-k는 0보다 커야 합니다")
         return 1
+    if args.subtopic_top_k <= 0:
+        print("--subtopic-top-k는 0보다 커야 합니다")
+        return 1
 
     if not args.database_url:
         print(
@@ -67,13 +96,19 @@ def main() -> int:
         )
         return 1
 
-    with ensure_db(DEFAULT_DB, database_url=args.database_url) as conn:
+    with ensure_db(
+        DEFAULT_DB,
+        database_url=args.database_url,
+        require_classifier_schema=True,
+    ) as conn:
         count = run(
             conn,
             args.min_net_article_count,
             args.batch_size,
             args.top_k,
             args.llm_model,
+            subtopics_enabled=args.subtopics,
+            subtopic_top_k=args.subtopic_top_k,
         )
         print(f"[done] 토픽 배정 완료: {count}건")
 
