@@ -202,7 +202,11 @@ def process_event_classification(
     client = _get_client(llm_model)
     processed_count = 0
 
-    with ensure_db("data/news.db", database_url=database_url) as conn:
+    with ensure_db(
+        "data/news.db",
+        database_url=database_url,
+        require_classifier_schema=True,
+    ) as conn:
         if single_article_id is not None:
             row = conn.query_one(
                 """

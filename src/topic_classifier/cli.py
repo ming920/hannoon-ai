@@ -96,7 +96,11 @@ def main() -> int:
         )
         return 1
 
-    with ensure_db(DEFAULT_DB, database_url=args.database_url) as conn:
+    with ensure_db(
+        DEFAULT_DB,
+        database_url=args.database_url,
+        require_classifier_schema=True,
+    ) as conn:
         count = run(
             conn,
             args.min_net_article_count,
