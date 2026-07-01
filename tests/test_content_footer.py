@@ -74,6 +74,18 @@ class StripBoilerplateFooterTests(unittest.TestCase):
             BODY + "해당 조항은 copyright 원칙을 다룬다고 명시했다.",
         )
 
+    def test_yonhaptv_jebo_cta_block_removed(self):
+        # 연합뉴스TV 제보 CTA 블록('기사문의 및 제보 … 친구 추가 jebo23@yna.co.kr')을 통째로 제거.
+        text = BODY + "연합뉴스TV 기사문의 및 제보 : 카톡/라인 jebo23 당신이 담은 순간이 뉴스입니다! 친구 추가 jebo23@yna.co.kr"
+        cleaned = strip_boilerplate_footer(text)
+        self.assertNotIn("기사문의", cleaned)
+        self.assertNotIn("jebo23", cleaned)
+        self.assertIn("문장입니다", cleaned)  # 본문은 보존
+
+    def test_kmib_goodnews_footer_removed(self):
+        text = BODY + "윤예솔 기자 pinetree23@kmib.co.kr GoodNews paper ⓒ 국민일보(www.kmib.co.kr)"
+        self.assertNotIn("GoodNews", strip_boilerplate_footer(text))
+
     def test_copyright_symbol_with_publisher_is_footer(self):
         # 기호 뒤에 언론사명이 오면 실제 저작권 푸터로 보고 절단.
         self.assertNotIn("세계일보", strip_boilerplate_footer(BODY + "ⓒ 세계일보. 무단 전재 및 재배포 금지"))

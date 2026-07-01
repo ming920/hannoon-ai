@@ -34,6 +34,24 @@ class PublisherSelectorTests(unittest.TestCase):
         text = extract_article_text(html, "https://www.seoul.co.kr/news/newsView.php?id=1")
         self.assertIn("실제 기사 본문 문장", text)
 
+    def test_donga_news_view_selector(self):
+        html = (
+            "<html><body><div class='view_related'>관련기사 목록 닫기</div>"
+            f"<div class='news_view'>{_BODY}</div></body></html>"
+        )
+        text = extract_article_text(html, "https://www.donga.com/news/Politics/article/all/1/1")
+        self.assertIn("실제 기사 본문 문장", text)
+        self.assertNotIn("관련기사 목록", text)
+
+    def test_hani_article_text_selector(self):
+        html = (
+            f"<html><body><div class='article-text'>{_BODY}</div>"
+            "<div class='related'>이전 다음 광고 광고</div></body></html>"
+        )
+        text = extract_article_text(html, "https://www.hani.co.kr/arti/politics/1.html")
+        self.assertIn("실제 기사 본문 문장", text)
+        self.assertNotIn("이전 다음 광고", text)
+
     def test_unregistered_domain_falls_back_to_generic(self):
         # 미등록 도메인은 전용 셀렉터를 타지 않고 기존 article 휴리스틱으로 처리된다.
         html = f"<html><body><article>{_BODY}</article></body></html>"

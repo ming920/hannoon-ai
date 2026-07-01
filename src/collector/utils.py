@@ -150,14 +150,8 @@ UNWANTED_IMAGE_EXTENSIONS = (".svg", ".ico")
 UNWANTED_PATH_SEGMENTS = {"reporter", "writer"}
 
 # (3) 파일명(확장자 제외, 접미 숫자 제거)이 정확히 이 값이면 플레이스홀더로 배제한다.
-#     완전일치라 'white-house-summit.jpg'(백악관)·'google-io.jpg'는 살아남는다.
+#     완전일치는 정상 슬러그와 충돌하기 쉬운 단어(white↔white-house 등)에만 쓴다.
 PLACEHOLDER_IMAGE_STEMS = {
-    "blank",
-    "default",
-    "dummy",
-    "noimg",
-    "placeholder",
-    "spacer",
     "transparent",
     "white",
 }
@@ -171,18 +165,24 @@ UNWANTED_IMAGE_TOKENS = {
     "advert",
     "avatar",
     "banner",
+    "blank",
     "btn",
     "button",
     "caution",
+    "default",
+    "dummy",
     "facebook",
     "icon",
     "kakao",
     "logo",
     "myagent",
+    "noimg",
     "pixel",
+    "placeholder",
     "profile",
     "share",
     "sns",
+    "spacer",
     "sprite",
     "twitter",
     "videojs",
@@ -530,6 +530,8 @@ def _extract_declared_article_body(soup: BeautifulSoup) -> str:
 PUBLISHER_ARTICLE_SELECTORS = {
     "yna.co.kr": [".story-news.article"],
     "seoul.co.kr": ["#articleContent"],
+    "donga.com": [".news_view"],
+    "hani.co.kr": [".article-text"],
 }
 
 

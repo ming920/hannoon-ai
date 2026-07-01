@@ -56,6 +56,7 @@ STRONG_BOILERPLATE_KEYWORDS = (
 # 마커는 되도록 푸터 정형구(저작권자 뒤 (·ⓒ·<, '재배포 금지' 등)로 좁힌다.
 _FOOTER_MARKERS = re.compile(
     r"제보는|◎공감언론|저작권자\s*[(<ⓒ©]|재배포\s*금지|기자\s*페이지|"
+    r"기사\s*문의|당신이 담은 순간|GoodNews|"  # 연합뉴스TV 제보 CTA 블록, 국민일보 푸터
     r"copyright\s*[(©ⓒ]|all\s+rights\s+reserved|"
     # 맨몸 ⓒ/© 는 뒤에 언론사명이 따라오는 저작권 표기일 때만 푸터로 본다.
     # (본문 중 "작품에 ⓒ 표시가 붙어" 같은 언급 오절단 방지)

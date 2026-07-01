@@ -38,6 +38,13 @@ class IsUnwantedImageUrlTests(unittest.TestCase):
         self.assertTrue(_is_unwanted_image_url("https://www.yna.co.kr/etc/bg_none_logo01.png"))
         self.assertTrue(_is_unwanted_image_url("https://cdn.example.com/a/banner02.jpg"))
 
+    def test_default_placeholder_substring_rejected(self):
+        # 'people_default_pc.png'처럼 default가 파일명 일부여도 걸러야 한다(E2E에서 SBS 오추출).
+        self.assertTrue(_is_unwanted_image_url("https://img.sbs.co.kr/news/pc/people_default_pc.png"))
+        self.assertTrue(_is_unwanted_image_url("https://cdn.example.com/a/img_blank_2.gif"))
+        # 정상 슬러그는 여전히 보존.
+        self.assertFalse(_is_unwanted_image_url("https://cdn.example.com/2024/white-house-summit.jpg"))
+
     def test_legit_news_photos_kept(self):
         # 슬러그에 white/google/ico/writer가 들어도 실제 기사 사진은 보존해야 한다.
         for url in [
