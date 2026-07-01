@@ -5,6 +5,26 @@
     "https://www.chosun.com/arc/outboundfeeds/rss/category/national/?outputType=xml",
     "https://www.chosun.com/arc/outboundfeeds/rss/category/international/?outputType=xml",
 
+    "https://www.yna.co.kr/rss/politics.xml",
+    "https://www.yna.co.kr/rss/economy.xml",
+    "https://www.yna.co.kr/rss/society.xml",
+    "https://www.yna.co.kr/rss/international.xml",
+    "https://www.yna.co.kr/rss/northkorea.xml",
+
+    "https://www.hankyung.com/feed/politics",
+    "https://www.hankyung.com/feed/economy",
+    "https://www.hankyung.com/feed/society",
+    "https://www.hankyung.com/feed/international",
+
+    "https://www.seoul.co.kr/xml/rss/rss_politics.xml",
+    "https://www.seoul.co.kr/xml/rss/rss_economy.xml",
+    "https://www.seoul.co.kr/xml/rss/rss_society.xml",
+    "https://www.seoul.co.kr/xml/rss/rss_international.xml",
+
+    "http://rss.ohmynews.com/rss/politics.xml",
+    "http://rss.ohmynews.com/rss/economy.xml",
+    "http://rss.ohmynews.com/rss/society.xml",
+    "http://rss.ohmynews.com/rss/international.xml",
 
     "https://www.yonhapnewstv.co.kr/category/news/politics/feed/",
     "https://www.yonhapnewstv.co.kr/category/news/economy/feed/",
@@ -38,33 +58,10 @@
     "https://rss.donga.com/economy.xml",
     "https://rss.donga.com/international.xml",
 
-    "https://www.mediatoday.co.kr/rss/S1N2.xml",
-    "https://www.mediatoday.co.kr/rss/S1N3.xml",
-    "https://www.mediatoday.co.kr/rss/S1N4.xml",
-    "https://www.mediatoday.co.kr/rss/S1N6.xml",
-
-    "https://www.seoulnews.org/rss/politics-society",
-    "https://www.seoulnews.org/rss/economy-industry",
-
     "https://www.segye.com/Articles/RSSList/segye_politic.xml",
     "https://www.segye.com/Articles/RSSList/segye_economy.xml",
     "https://www.segye.com/Articles/RSSList/segye_society.xml",
     "https://www.segye.com/Articles/RSSList/segye_international.xml",
-
-    "https://www.sisajournal.com/rss/S1N47.xml",
-    "https://www.sisajournal.com/rss/S1N54.xml",
-    "https://www.sisajournal.com/rss/S1N58.xml",
-    "https://www.sisajournal.com/rss/S1N59.xml",
-
-    "https://www.ablenews.co.kr/rss/S1N3.xml",
-    "https://www.ablenews.co.kr/rss/S1N4.xml",
-    "https://www.ablenews.co.kr/rss/S1N11.xml",
-
-
-    "https://www.womennews.co.kr/rss/S1N1.xml",
-    "https://www.womennews.co.kr/rss/S1N2.xml",
-    "https://www.womennews.co.kr/rss/S1N3.xml",
-    "https://www.womennews.co.kr/rss/S1N4.xml",
 
     "https://www.pressian.com/api/v3/site/rss/section/65",
     "https://www.pressian.com/api/v3/site/rss/section/66",
@@ -81,7 +78,6 @@
     "https://news-ex.jtbc.co.kr/v1/get/rss/section/society",
     "https://news-ex.jtbc.co.kr/v1/get/rss/section/international",
 
-
     "https://news.sbs.co.kr/news/SectionRssFeed.do?sectionId=01&plink=RSSREADER",
     "https://news.sbs.co.kr/news/SectionRssFeed.do?sectionId=02&plink=RSSREADER",
     "https://news.sbs.co.kr/news/SectionRssFeed.do?sectionId=03&plink=RSSREADER",
@@ -93,15 +89,9 @@
     "https://rss.etoday.co.kr/eto/politics_news.xml",
     "https://rss.etoday.co.kr/eto/society_news.xml",
 
-    "https://www.asiae.co.kr/rss/economy.htm",
-    "https://www.asiae.co.kr/rss/politics.htm",
-    "https://www.asiae.co.kr/rss/society.htm",
-    "https://www.asiae.co.kr/rss/world.htm",
-
     "https://www.mbn.co.kr/rss/politics/",
     "https://www.mbn.co.kr/rss/economy/",
     "https://www.mbn.co.kr/rss/society/",
     "https://www.mbn.co.kr/rss/international/"
   ]
 }
-
