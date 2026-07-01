@@ -12,6 +12,12 @@ from .utils import (
     resolve_entry_link,
 )
 
+# 일부 언론사(예: 한국경제)는 기본 feedparser UA를 403으로 차단하므로 브라우저 UA로 요청한다.
+USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+)
+
 
 def encode_feed_modified(value) -> str | None:
     """feedparser modified(struct_time)를 DB timestamp에 저장할 ISO 문자열로 변환한다."""
@@ -56,7 +62,7 @@ def fetch_feed(conn, feed_url: str, offline: bool) -> int:
         return 0
 
     # feedparser가 URL/로컬 파일을 모두 처리하므로 테스트 피드도 같은 경로로 검증할 수 있다.
-    parsed = feedparser.parse(feed_url, etag=etag, modified=modified)
+    parsed = feedparser.parse(feed_url, etag=etag, modified=modified, agent=USER_AGENT)
     if getattr(parsed, "status", None) == 304:
         conn.execute(
             "UPDATE feeds SET last_checked = ? WHERE url = ?",
