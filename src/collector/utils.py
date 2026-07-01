@@ -243,9 +243,15 @@ def _is_unwanted_image_url(url: str) -> bool:
         if stem in PLACEHOLDER_IMAGE_STEMS:
             return True
 
-    # (4) 나머지는 기존 부분 토큰 교집합 검사(로고/광고/아이콘 등).
+    # (4) 나머지는 부분 토큰 교집합 검사(로고/광고/아이콘 등).
+    # 토큰 끝 숫자를 떼어 'logo01'·'bg_none_logo01' 같은 접미 숫자 아이콘도 'logo'로 매칭한다.
     target = f"{parsed.netloc}/{parsed.path}".lower().replace("_", "-").replace(".", "-")
-    tokens = {part.strip() for chunk in target.split("/") for part in chunk.split("-") if part.strip()}
+    tokens = set()
+    for chunk in target.split("/"):
+        for part in chunk.split("-"):
+            part = part.strip().rstrip("0123456789")
+            if part:
+                tokens.add(part)
     return bool(tokens & UNWANTED_IMAGE_TOKENS)
 
 

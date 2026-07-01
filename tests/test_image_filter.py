@@ -33,6 +33,11 @@ class IsUnwantedImageUrlTests(unittest.TestCase):
         self.assertTrue(_is_unwanted_image_url("https://www.mbn.co.kr/player/videojs/png/ic_caution.png"))
         self.assertTrue(_is_unwanted_image_url("https://cdn.example.com/common/logo.png"))
 
+    def test_digit_suffixed_icon_tokens_rejected(self):
+        # 접미 숫자가 붙은 아이콘(logo01, bg_none_logo01)도 걸러야 한다(E2E에서 연합 오추출).
+        self.assertTrue(_is_unwanted_image_url("https://www.yna.co.kr/etc/bg_none_logo01.png"))
+        self.assertTrue(_is_unwanted_image_url("https://cdn.example.com/a/banner02.jpg"))
+
     def test_legit_news_photos_kept(self):
         # 슬러그에 white/google/ico/writer가 들어도 실제 기사 사진은 보존해야 한다.
         for url in [
