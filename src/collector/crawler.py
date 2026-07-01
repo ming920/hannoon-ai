@@ -4,7 +4,7 @@ from urllib.request import url2pathname
 
 import requests
 
-from .content_cleaner import should_llm_cleanup
+from .content_cleaner import should_llm_cleanup, strip_boilerplate_footer
 from .settings import DEFAULT_CRAWL_BATCH_SIZE, USER_AGENT
 from .storage import enqueue_article_job, now_iso
 from .utils import extract_article_data
@@ -126,6 +126,10 @@ def crawl_articles(
                 batch_failed += 1
                 finished_in_batch += 1
                 continue
+
+            # 저작권/제보 푸터를 먼저 제거해 LLM 정제 판단과 길이 검증이 본문 기준으로 이뤄지게 한다.
+            if text:
+                text = strip_boilerplate_footer(text)
 
             if text and (llm_cleanup or external_cleaner):
                 needs_cleanup, cleanup_reasons = should_llm_cleanup(text)

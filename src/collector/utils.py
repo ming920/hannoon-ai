@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from pathlib import Path
 from urllib.parse import unquote, urljoin, urlparse
 from urllib.request import url2pathname
@@ -138,27 +139,54 @@ def _looks_like_url(value: str) -> bool:
     return parsed.scheme in {"http", "https"}
 
 
+# 대표 이미지 필터는 오탐(정상 사진 배제)을 막기 위해 검사 층위를 나눈다.
+# baseline 진단 근거: google.svg(한겨레), white.PNG(MBN), ic_caution·videojs(MBN),
+# ic_myagent(매경), /reporter/·/writer/ 기자·필진 사진(연합·서울).
+# (1) 아이콘 전용 확장자. 뉴스 사진은 jpg/png/webp이며 svg/ico가 아니다.
+UNWANTED_IMAGE_EXTENSIONS = (".svg", ".ico")
+
+# (2) 경로 디렉터리 세그먼트가 정확히 이 값이면 기자/필진 프로필 사진으로 보고 배제한다.
+#     세그먼트 완전일치라 'writer-column-main.jpg' 같은 슬러그는 걸리지 않는다.
+UNWANTED_PATH_SEGMENTS = {"reporter", "writer"}
+
+# (3) 파일명(확장자 제외, 접미 숫자 제거)이 정확히 이 값이면 플레이스홀더로 배제한다.
+#     완전일치라 'white-house-summit.jpg'(백악관)·'google-io.jpg'는 살아남는다.
+PLACEHOLDER_IMAGE_STEMS = {
+    "blank",
+    "default",
+    "dummy",
+    "noimg",
+    "placeholder",
+    "spacer",
+    "transparent",
+    "white",
+}
+
+# (4) 경로/도메인 세그먼트에 부분 토큰으로 등장하면 배제하는 구조적 잡음(로고/광고/아이콘/공유).
+#     일반 뉴스 슬러그와 충돌하기 쉬운 단어(white/google/reporter/writer/svg/ico)는 위 (1)~(3)에서
+#     더 엄격하게 처리하므로 여기서는 제외한다.
 UNWANTED_IMAGE_TOKENS = {
     "ad",
     "ads",
     "advert",
     "avatar",
     "banner",
-    "blank",
     "btn",
     "button",
-    "default",
+    "caution",
     "facebook",
     "icon",
     "kakao",
     "logo",
+    "myagent",
     "pixel",
     "profile",
     "share",
     "sns",
-    "spacer",
     "sprite",
     "twitter",
+    "videojs",
+    "watermark",
 }
 
 
@@ -194,8 +222,28 @@ def _normalize_image_url(value: str | None, base_url: str | None = None) -> str:
 
 
 def _is_unwanted_image_url(url: str) -> bool:
-    """로고, 아이콘, 광고처럼 기사 대표 이미지로 부적절한 URL을 걸러낸다."""
+    """로고, 아이콘, 광고, 기자사진처럼 기사 대표 이미지로 부적절한 URL을 걸러낸다."""
     parsed = urlparse(url)
+    path = parsed.path.lower()
+
+    # (1) 아이콘 전용 확장자(svg/ico)는 뉴스 사진이 아니다.
+    if path.endswith(UNWANTED_IMAGE_EXTENSIONS):
+        return True
+
+    segments = [seg for seg in path.split("/") if seg]
+
+    # (2) 디렉터리 세그먼트가 기자/필진 사진 경로면 배제한다.
+    if set(segments) & UNWANTED_PATH_SEGMENTS:
+        return True
+
+    # (3) 파일명(확장자·접미 숫자 제외) 전체가 플레이스홀더 단어면 배제한다.
+    if segments:
+        stem = segments[-1].rsplit(".", 1)[0]
+        stem = re.sub(r"[-_]\d+$", "", stem)
+        if stem in PLACEHOLDER_IMAGE_STEMS:
+            return True
+
+    # (4) 나머지는 기존 부분 토큰 교집합 검사(로고/광고/아이콘 등).
     target = f"{parsed.netloc}/{parsed.path}".lower().replace("_", "-").replace(".", "-")
     tokens = {part.strip() for chunk in target.split("/") for part in chunk.split("-") if part.strip()}
     return bool(tokens & UNWANTED_IMAGE_TOKENS)
@@ -471,6 +519,40 @@ def _extract_declared_article_body(soup: BeautifulSoup) -> str:
     return ""
 
 
+# 언론사 도메인별 우선 본문 셀렉터. baseline 진단에서 범용 셀렉터를 못 잡아 heuristic으로
+# 추락(본문에 네비/UI 범벅)한 언론사만 등록한다. 등록되지 않은 도메인은 기존 로직 그대로다.
+PUBLISHER_ARTICLE_SELECTORS = {
+    "yna.co.kr": [".story-news.article"],
+    "seoul.co.kr": ["#articleContent"],
+}
+
+
+def _article_selectors_for_url(page_url: str | None) -> list[str]:
+    """URL의 도메인에 등록된 언론사 전용 본문 셀렉터를 반환한다(없으면 빈 리스트)."""
+    if not page_url:
+        return []
+    host = urlparse(page_url).netloc.lower()
+    for domain, selectors in PUBLISHER_ARTICLE_SELECTORS.items():
+        # 정확 도메인 또는 서브도메인만 매칭(부분 문자열 매칭이 'notseoul.co.kr'을 잡는 것 방지).
+        if host == domain or host.endswith("." + domain):
+            return selectors
+    return []
+
+
+def _extract_publisher_article_body(soup: BeautifulSoup, page_url: str | None) -> str:
+    """언론사 도메인에 등록된 전용 셀렉터로 본문을 먼저 시도한다."""
+    for selector in _article_selectors_for_url(page_url):
+        node = soup.select_one(selector)
+        if node is None:
+            continue
+        fragment = BeautifulSoup(str(node), "html.parser")
+        _strip_unwanted(fragment)
+        text = " ".join(fragment.get_text(" ", strip=True).split())
+        if len(text) >= 200:
+            return text
+    return ""
+
+
 def _image_from_fusion_element(element: dict, base_url: str | None = None) -> str:
     """Arc/Fusion CMS content element에서 이미지 URL 후보를 찾는다."""
     for key in ("url", "src", "image_url", "canonical_url"):
@@ -571,14 +653,15 @@ def extract_article_image_url(html: str, page_url: str | None = None) -> str:
 
 def extract_article_data(html: str, page_url: str | None = None) -> tuple[str, str]:
     """크롤러 호출부가 같은 HTML 응답에서 본문과 이미지 URL을 함께 받게 하는 래퍼다."""
-    return extract_article_text(html), extract_article_image_url(html, page_url)
+    return extract_article_text(html, page_url), extract_article_image_url(html, page_url)
 
 
-def extract_article_text(html: str) -> str:
+def extract_article_text(html: str, page_url: str | None = None) -> str:
     """HTML에서 기사 본문 텍스트를 추출한다.
 
     우선 사이트별로 안정적인 JSON 데이터 구조를 시도한다. 사이트별 구조가 없으면
-    article/main/section/div 후보 중 가장 본문에 가까운 영역을 점수화해 선택한다.
+    언론사 도메인 전용 셀렉터 → 범용 본문 셀렉터 → article/main/section/div 후보를
+    점수화한 범용 휴리스틱 순으로 떨어진다. page_url은 언론사 전용 셀렉터 선택에만 쓰인다.
     """
     # 사이트 전용 구조를 먼저 시도하고, 실패하면 범용 DOM 휴리스틱으로 떨어진다.
     fusion_text = _extract_fusion_global_content(html)
@@ -592,6 +675,9 @@ def extract_article_text(html: str) -> str:
         soup = BeautifulSoup(html, "html.parser")
     except Exception:
         return ""
+    publisher_text = _extract_publisher_article_body(soup, page_url)
+    if publisher_text:
+        return publisher_text
     declared_text = _extract_declared_article_body(soup)
     if declared_text:
         return declared_text
