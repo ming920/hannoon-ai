@@ -17,6 +17,7 @@ from topic_classifier.settings import (
     ASSIGN_SCORE_THRESHOLD,
     DISTANCE_THRESHOLD,
     LLM_MODEL,
+    SUBTOPIC_ASSIGN_SCORE_THRESHOLD,
 )
 from summary_utils import normalize_summary, normalize_topic_title
 
@@ -116,12 +117,21 @@ def _load_parent_summary_events(conn, parent_topic_id: int) -> list[dict]:
     ]
 
 
-def _resolve_action(client, candidates, build_prompt, *, fallback_title, fallback_reason="검색 후보 없음"):
+def _resolve_action(
+    client,
+    candidates,
+    build_prompt,
+    *,
+    fallback_title,
+    fallback_reason="검색 후보 없음",
+    score_threshold=ASSIGN_SCORE_THRESHOLD,
+):
     """assign-or-create 결정을 공통 처리한다.
 
     후보가 있으면 LLM 배정 판단을, 후보가 0개면 LLM 호출을 생략하고 즉시 create로
     결정한다(비용 전략 핵심). 이어서 점수/사유 가드레일을 적용해 모순된 assign을
     create로 강등한 뒤 (action, decision)을 반환한다. 평면·계층 분류가 모두 재사용한다.
+    score_threshold로 경로별(부모/서브) assign 점수 문턱을 달리 줄 수 있다.
     """
     if candidates:
         decision = _call_json(client, build_prompt(), required_keys={"action"})
@@ -137,7 +147,7 @@ def _resolve_action(client, candidates, build_prompt, *, fallback_title, fallbac
     if action not in {"assign", "create"}:
         raise ValueError(f"Invalid topic action from LLM: {action!r}")
     if action == "assign" and (
-        _load_decision_score(decision) < ASSIGN_SCORE_THRESHOLD
+        _load_decision_score(decision) < score_threshold
         or _reason_rejects_assignment(decision.get("reason"))
     ):
         decision = {
@@ -357,6 +367,8 @@ def _assign_hierarchical(
             sub_candidates,
         ),
         fallback_title=ev.title,
+        # 서브토픽은 과병합 방지를 위해 부모보다 높은 문턱을 쓸 수 있다.
+        score_threshold=SUBTOPIC_ASSIGN_SCORE_THRESHOLD,
     )
 
     # 임베딩: result는 항상 저장, cause는 부모·서브 중 하나라도 새로 생성할 때만 필요.

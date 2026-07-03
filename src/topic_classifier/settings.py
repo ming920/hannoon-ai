@@ -16,6 +16,11 @@ SUBTOPIC_TOP_K = int(os.environ.get("TOPIC_SUBTOPIC_CANDIDATE_LIMIT", str(TOP_K)
 # 더미 평가(eval/results/AUTOTUNE_LOG.md) 결과 0.90이 토픽 클러스터링을 크게 개선(topic B-cubed F1 0.20→0.50, ARI 0.01→0.23, over_merge=0). 실기사 검증 후 프로덕션 롤아웃 권장.
 DISTANCE_THRESHOLD = float(os.environ.get("TOPIC_DISTANCE_THRESHOLD", "0.90"))
 ASSIGN_SCORE_THRESHOLD = float(os.environ.get("TOPIC_ASSIGN_SCORE_THRESHOLD", "0.75"))
+# 서브토픽 전용 assign 점수 임계값. 부모(recall 우선)와 서브(과병합 방지)의 요구가
+# 상반되므로 분리한다. 미지정 시 ASSIGN_SCORE_THRESHOLD와 동일(기존 동작 유지).
+SUBTOPIC_ASSIGN_SCORE_THRESHOLD = float(
+    os.environ.get("TOPIC_SUBTOPIC_ASSIGN_SCORE_THRESHOLD", str(ASSIGN_SCORE_THRESHOLD))
+)
 LLM_MODEL = os.environ.get(
     "LLM_TOPIC_MODEL",
     os.environ.get("LLM_TOPIC_EVENT_MODEL", os.environ.get("LLM_DEFAULT_MODEL", "solar-mini")),

@@ -40,6 +40,7 @@ from topic_classifier.pipeline import (
     _assign_hierarchical,
     run,
 )
+import topic_classifier.settings as topic_settings
 from topic_classifier.prompts import build_subtopic_assignment_prompt
 
 
@@ -372,6 +373,30 @@ class ResolveActionTests(unittest.TestCase):
         )
         self.assertEqual(decision["new_title"], "폴백제목")
 
+    def test_custom_score_threshold_demotes_midband_assign(self):
+        """score_threshold 를 0.85로 올리면 0.80 assign 이 create 로 강등되어야 한다."""
+        candidates = [_make_candidate(7)]
+        client = self._mock_client({
+            "action": "assign", "topic_id": 7, "score": 0.80, "reason": "같은 갈래",
+        })
+        action, _ = _resolve_action(
+            client, candidates, lambda: "prompt", fallback_title="폴백",
+            score_threshold=0.85,
+        )
+        self.assertEqual(action, "create")
+
+    def test_custom_score_threshold_keeps_confident_assign(self):
+        """문턱 0.85에서도 0.90 assign 은 그대로 통과해야 한다."""
+        candidates = [_make_candidate(8)]
+        client = self._mock_client({
+            "action": "assign", "topic_id": 8, "score": 0.90, "reason": "같은 갈래",
+        })
+        action, _ = _resolve_action(
+            client, candidates, lambda: "prompt", fallback_title="폴백",
+            score_threshold=0.85,
+        )
+        self.assertEqual(action, "assign")
+
 
 # ── 6. pipeline._select_candidate — 후보 집합 검증 ────────────────────────────
 
@@ -505,6 +530,49 @@ class AssignHierarchicalTests(unittest.TestCase):
         create_args = mock_create.call_args[0]
         self.assertEqual(create_args[4], 10)
         self.assertIn("create", label)
+
+    def test_sub_assign_uses_subtopic_threshold(self):
+        """서브 경로는 SUBTOPIC_ASSIGN_SCORE_THRESHOLD 로 강등을 판단해야 한다.
+
+        부모 assign 0.90(기본 문턱 통과), 서브 assign 0.80은 서브 문턱 0.85 미달로
+        create 강등 — 부모/서브 임계값 분리(critic C-3/C-11) 회귀 테스트.
+        """
+        ev = _make_event()
+        parent_cand = _make_candidate(10, title="부모제목", summary="부모요약")
+        sub_cand = _make_candidate(20, title="서브제목", summary="서브요약")
+        conn = FakePipelineConn()
+
+        # call 순서: 1) 부모 배정, 2) 서브 배정(강등), 3) 부모 롤업 (서브 롤업 없음)
+        client = MagicMock()
+        client.request_json.side_effect = [
+            {"action": "assign", "topic_id": 10, "score": 0.90, "reason": "동일 흐름"},
+            {"action": "assign", "topic_id": 20, "score": 0.80, "reason": "같은 갈래"},
+            {"title": "부모갱신", "summary": "부모요약갱신"},
+        ]
+
+        def _search(conn_, emb, cat, dist, k, *, roots_only=False, parent_topic_id=None):
+            if roots_only:
+                return [parent_cand]
+            if parent_topic_id == 10:
+                return [sub_cand]
+            return []
+
+        patches = self._common_patches()
+        with patch(f"{_PATCH_BASE}.SUBTOPIC_ASSIGN_SCORE_THRESHOLD", 0.85), \
+             patch(f"{_PATCH_BASE}.topic_causes.search_candidates", side_effect=_search), \
+             patch(f"{_PATCH_BASE}.topics.create_topic", return_value=300) as mock_create, \
+             patch(f"{_PATCH_BASE}.topics.update_topic") as mock_update:
+            for p in patches:
+                p.start()
+            try:
+                label = _assign_hierarchical(conn, client, ev, "원인", "결과", 5, 5)
+            finally:
+                for p in patches:
+                    p.stop()
+
+        mock_update.assert_called_once()  # 부모만 update
+        mock_create.assert_called_once()  # 서브는 강등되어 create
+        self.assertIn("sub create", label)
 
     def test_existing_parent_existing_sub_assigns_both(self):
         """부모·서브 모두 기존 토픽에 배정될 때 두 롤업 LLM 이 호출되어야 한다."""
@@ -751,6 +819,35 @@ class SubtopicsSettingsTests(unittest.TestCase):
         import topic_classifier.settings as s
         os.environ.pop("TOPIC_SUBTOPICS_ENABLED", None)
         importlib.reload(s)
+
+
+# ── 11. settings — SUBTOPIC_ASSIGN_SCORE_THRESHOLD 파싱 ──────────────────────
+
+class SubtopicThresholdSettingsTests(unittest.TestCase):
+    """서브토픽 전용 assign 임계값의 기본값·env 오버라이드를 검증."""
+
+    def _reload_settings(self):
+        import importlib
+        importlib.reload(topic_settings)
+        return topic_settings
+
+    def test_defaults_to_assign_threshold(self):
+        """env 미지정 시 ASSIGN_SCORE_THRESHOLD 와 동일해야 한다(기존 동작 유지)."""
+        os.environ.pop("TOPIC_SUBTOPIC_ASSIGN_SCORE_THRESHOLD", None)
+        s = self._reload_settings()
+        self.assertAlmostEqual(
+            s.SUBTOPIC_ASSIGN_SCORE_THRESHOLD, s.ASSIGN_SCORE_THRESHOLD
+        )
+
+    def test_env_override_applies(self):
+        """TOPIC_SUBTOPIC_ASSIGN_SCORE_THRESHOLD=0.85 지정 시 그 값을 써야 한다."""
+        with patch.dict(os.environ, {"TOPIC_SUBTOPIC_ASSIGN_SCORE_THRESHOLD": "0.85"}):
+            s = self._reload_settings()
+            self.assertAlmostEqual(s.SUBTOPIC_ASSIGN_SCORE_THRESHOLD, 0.85)
+
+    def tearDown(self):
+        os.environ.pop("TOPIC_SUBTOPIC_ASSIGN_SCORE_THRESHOLD", None)
+        self._reload_settings()
 
 
 if __name__ == "__main__":
