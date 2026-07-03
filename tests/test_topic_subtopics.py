@@ -524,7 +524,8 @@ class AssignHierarchicalTests(unittest.TestCase):
             return []  # 서브토픽 후보 없음
 
         patches = self._common_patches()
-        with patch(f"{_PATCH_BASE}.topic_causes.search_candidates", side_effect=_search), \
+        with patch(f"{_PATCH_BASE}.SUBTOPIC_MODE", "llm"), \
+             patch(f"{_PATCH_BASE}.topic_causes.search_candidates", side_effect=_search), \
              patch(f"{_PATCH_BASE}.topics.create_topic", return_value=201) as mock_create, \
              patch(f"{_PATCH_BASE}.topics.update_topic") as mock_update:
             for p in patches:
@@ -572,7 +573,8 @@ class AssignHierarchicalTests(unittest.TestCase):
             return []
 
         patches = self._common_patches()
-        with patch(f"{_PATCH_BASE}.SUBTOPIC_ASSIGN_SCORE_THRESHOLD", 0.85), \
+        with patch(f"{_PATCH_BASE}.SUBTOPIC_MODE", "llm"), \
+             patch(f"{_PATCH_BASE}.SUBTOPIC_ASSIGN_SCORE_THRESHOLD", 0.85), \
              patch(f"{_PATCH_BASE}.topic_causes.search_candidates", side_effect=_search), \
              patch(f"{_PATCH_BASE}.topics.create_topic", return_value=300) as mock_create, \
              patch(f"{_PATCH_BASE}.topics.update_topic") as mock_update:
@@ -612,7 +614,8 @@ class AssignHierarchicalTests(unittest.TestCase):
             return []
 
         patches = self._common_patches()
-        with patch(f"{_PATCH_BASE}.topic_causes.search_candidates", side_effect=_search), \
+        with patch(f"{_PATCH_BASE}.SUBTOPIC_MODE", "llm"), \
+             patch(f"{_PATCH_BASE}.topic_causes.search_candidates", side_effect=_search), \
              patch(f"{_PATCH_BASE}.topics.create_topic") as mock_create, \
              patch(f"{_PATCH_BASE}.topics.update_topic") as mock_update:
             for p in patches:
