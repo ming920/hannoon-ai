@@ -1,0 +1,902 @@
+{
+  "dummy-E001-0": {
+    "gold_topic": "T001",
+    "gold_subtopic": "S001",
+    "gold_event": "E001"
+  },
+  "dummy-E001-1": {
+    "gold_topic": "T001",
+    "gold_subtopic": "S001",
+    "gold_event": "E001"
+  },
+  "dummy-E001-2": {
+    "gold_topic": "T001",
+    "gold_subtopic": "S001",
+    "gold_event": "E001"
+  },
+  "dummy-E001-3": {
+    "gold_topic": "T001",
+    "gold_subtopic": "S001",
+    "gold_event": "E001"
+  },
+  "dummy-E001-4": {
+    "gold_topic": "T001",
+    "gold_subtopic": "S001",
+    "gold_event": "E001"
+  },
+  "dummy-E001-5": {
+    "gold_topic": "T001",
+    "gold_subtopic": "S001",
+    "gold_event": "E001"
+  },
+  "dummy-E002-0": {
+    "gold_topic": "T001",
+    "gold_subtopic": "S001",
+    "gold_event": "E002"
+  },
+  "dummy-E002-1": {
+    "gold_topic": "T001",
+    "gold_subtopic": "S001",
+    "gold_event": "E002"
+  },
+  "dummy-E002-2": {
+    "gold_topic": "T001",
+    "gold_subtopic": "S001",
+    "gold_event": "E002"
+  },
+  "dummy-E002-3": {
+    "gold_topic": "T001",
+    "gold_subtopic": "S001",
+    "gold_event": "E002"
+  },
+  "dummy-E002-4": {
+    "gold_topic": "T001",
+    "gold_subtopic": "S001",
+    "gold_event": "E002"
+  },
+  "dummy-E003-0": {
+    "gold_topic": "T001",
+    "gold_subtopic": "S002",
+    "gold_event": "E003"
+  },
+  "dummy-E003-1": {
+    "gold_topic": "T001",
+    "gold_subtopic": "S002",
+    "gold_event": "E003"
+  },
+  "dummy-E003-2": {
+    "gold_topic": "T001",
+    "gold_subtopic": "S002",
+    "gold_event": "E003"
+  },
+  "dummy-E003-3": {
+    "gold_topic": "T001",
+    "gold_subtopic": "S002",
+    "gold_event": "E003"
+  },
+  "dummy-E003-4": {
+    "gold_topic": "T001",
+    "gold_subtopic": "S002",
+    "gold_event": "E003"
+  },
+  "dummy-E003-5": {
+    "gold_topic": "T001",
+    "gold_subtopic": "S002",
+    "gold_event": "E003"
+  },
+  "dummy-E004-0": {
+    "gold_topic": "T001",
+    "gold_subtopic": "S002",
+    "gold_event": "E004"
+  },
+  "dummy-E004-1": {
+    "gold_topic": "T001",
+    "gold_subtopic": "S002",
+    "gold_event": "E004"
+  },
+  "dummy-E004-2": {
+    "gold_topic": "T001",
+    "gold_subtopic": "S002",
+    "gold_event": "E004"
+  },
+  "dummy-E004-3": {
+    "gold_topic": "T001",
+    "gold_subtopic": "S002",
+    "gold_event": "E004"
+  },
+  "dummy-E004-4": {
+    "gold_topic": "T001",
+    "gold_subtopic": "S002",
+    "gold_event": "E004"
+  },
+  "dummy-E009-0": {
+    "gold_topic": "T001",
+    "gold_subtopic": "S005",
+    "gold_event": "E009"
+  },
+  "dummy-E009-1": {
+    "gold_topic": "T001",
+    "gold_subtopic": "S005",
+    "gold_event": "E009"
+  },
+  "dummy-E009-2": {
+    "gold_topic": "T001",
+    "gold_subtopic": "S005",
+    "gold_event": "E009"
+  },
+  "dummy-E009-3": {
+    "gold_topic": "T001",
+    "gold_subtopic": "S005",
+    "gold_event": "E009"
+  },
+  "dummy-E009-4": {
+    "gold_topic": "T001",
+    "gold_subtopic": "S005",
+    "gold_event": "E009"
+  },
+  "dummy-E009-5": {
+    "gold_topic": "T001",
+    "gold_subtopic": "S005",
+    "gold_event": "E009"
+  },
+  "dummy-E009-6": {
+    "gold_topic": "T001",
+    "gold_subtopic": "S005",
+    "gold_event": "E009"
+  },
+  "dummy-E010-0": {
+    "gold_topic": "T001",
+    "gold_subtopic": "S005",
+    "gold_event": "E010"
+  },
+  "dummy-E010-1": {
+    "gold_topic": "T001",
+    "gold_subtopic": "S005",
+    "gold_event": "E010"
+  },
+  "dummy-E010-2": {
+    "gold_topic": "T001",
+    "gold_subtopic": "S005",
+    "gold_event": "E010"
+  },
+  "dummy-E010-3": {
+    "gold_topic": "T001",
+    "gold_subtopic": "S005",
+    "gold_event": "E010"
+  },
+  "dummy-E010-4": {
+    "gold_topic": "T001",
+    "gold_subtopic": "S005",
+    "gold_event": "E010"
+  },
+  "dummy-E010-5": {
+    "gold_topic": "T001",
+    "gold_subtopic": "S005",
+    "gold_event": "E010"
+  },
+  "dummy-E005-0": {
+    "gold_topic": "T002",
+    "gold_subtopic": "S003",
+    "gold_event": "E005"
+  },
+  "dummy-E005-1": {
+    "gold_topic": "T002",
+    "gold_subtopic": "S003",
+    "gold_event": "E005"
+  },
+  "dummy-E005-2": {
+    "gold_topic": "T002",
+    "gold_subtopic": "S003",
+    "gold_event": "E005"
+  },
+  "dummy-E005-3": {
+    "gold_topic": "T002",
+    "gold_subtopic": "S003",
+    "gold_event": "E005"
+  },
+  "dummy-E005-4": {
+    "gold_topic": "T002",
+    "gold_subtopic": "S003",
+    "gold_event": "E005"
+  },
+  "dummy-E005-5": {
+    "gold_topic": "T002",
+    "gold_subtopic": "S003",
+    "gold_event": "E005"
+  },
+  "dummy-E005-6": {
+    "gold_topic": "T002",
+    "gold_subtopic": "S003",
+    "gold_event": "E005"
+  },
+  "dummy-E006-0": {
+    "gold_topic": "T002",
+    "gold_subtopic": "S003",
+    "gold_event": "E005"
+  },
+  "dummy-E006-1": {
+    "gold_topic": "T002",
+    "gold_subtopic": "S003",
+    "gold_event": "E005"
+  },
+  "dummy-E006-2": {
+    "gold_topic": "T002",
+    "gold_subtopic": "S003",
+    "gold_event": "E005"
+  },
+  "dummy-E006-3": {
+    "gold_topic": "T002",
+    "gold_subtopic": "S003",
+    "gold_event": "E005"
+  },
+  "dummy-E006-4": {
+    "gold_topic": "T002",
+    "gold_subtopic": "S003",
+    "gold_event": "E005"
+  },
+  "dummy-E006-5": {
+    "gold_topic": "T002",
+    "gold_subtopic": "S003",
+    "gold_event": "E005"
+  },
+  "dummy-E011-0": {
+    "gold_topic": "T002",
+    "gold_subtopic": "S003",
+    "gold_event": "E005"
+  },
+  "dummy-E011-1": {
+    "gold_topic": "T002",
+    "gold_subtopic": "S003",
+    "gold_event": "E005"
+  },
+  "dummy-E011-2": {
+    "gold_topic": "T002",
+    "gold_subtopic": "S003",
+    "gold_event": "E005"
+  },
+  "dummy-E011-3": {
+    "gold_topic": "T002",
+    "gold_subtopic": "S003",
+    "gold_event": "E005"
+  },
+  "dummy-E011-4": {
+    "gold_topic": "T002",
+    "gold_subtopic": "S003",
+    "gold_event": "E005"
+  },
+  "dummy-E011-5": {
+    "gold_topic": "T002",
+    "gold_subtopic": "S003",
+    "gold_event": "E005"
+  },
+  "dummy-E007-0": {
+    "gold_topic": "T002",
+    "gold_subtopic": "S004",
+    "gold_event": "E007"
+  },
+  "dummy-E007-1": {
+    "gold_topic": "T002",
+    "gold_subtopic": "S004",
+    "gold_event": "E007"
+  },
+  "dummy-E007-2": {
+    "gold_topic": "T002",
+    "gold_subtopic": "S004",
+    "gold_event": "E007"
+  },
+  "dummy-E007-3": {
+    "gold_topic": "T002",
+    "gold_subtopic": "S004",
+    "gold_event": "E007"
+  },
+  "dummy-E007-4": {
+    "gold_topic": "T002",
+    "gold_subtopic": "S004",
+    "gold_event": "E007"
+  },
+  "dummy-E008-0": {
+    "gold_topic": "T002",
+    "gold_subtopic": "S004",
+    "gold_event": "E008"
+  },
+  "dummy-E008-1": {
+    "gold_topic": "T002",
+    "gold_subtopic": "S004",
+    "gold_event": "E008"
+  },
+  "dummy-E008-2": {
+    "gold_topic": "T002",
+    "gold_subtopic": "S004",
+    "gold_event": "E008"
+  },
+  "dummy-E008-3": {
+    "gold_topic": "T002",
+    "gold_subtopic": "S004",
+    "gold_event": "E008"
+  },
+  "dummy-E008-4": {
+    "gold_topic": "T002",
+    "gold_subtopic": "S004",
+    "gold_event": "E008"
+  },
+  "dummy-E008-5": {
+    "gold_topic": "T002",
+    "gold_subtopic": "S004",
+    "gold_event": "E008"
+  },
+  "dummy-E012-0": {
+    "gold_topic": "T002",
+    "gold_subtopic": "S004",
+    "gold_event": "E012"
+  },
+  "dummy-E012-1": {
+    "gold_topic": "T002",
+    "gold_subtopic": "S004",
+    "gold_event": "E012"
+  },
+  "dummy-E012-2": {
+    "gold_topic": "T002",
+    "gold_subtopic": "S004",
+    "gold_event": "E012"
+  },
+  "dummy-E012-3": {
+    "gold_topic": "T002",
+    "gold_subtopic": "S004",
+    "gold_event": "E012"
+  },
+  "dummy-E012-4": {
+    "gold_topic": "T002",
+    "gold_subtopic": "S004",
+    "gold_event": "E012"
+  },
+  "dummy-E012-5": {
+    "gold_topic": "T002",
+    "gold_subtopic": "S004",
+    "gold_event": "E012"
+  },
+  "dummy-E013-0": {
+    "gold_topic": "T003",
+    "gold_subtopic": "S006",
+    "gold_event": "E013"
+  },
+  "dummy-E013-1": {
+    "gold_topic": "T003",
+    "gold_subtopic": "S006",
+    "gold_event": "E013"
+  },
+  "dummy-E013-2": {
+    "gold_topic": "T003",
+    "gold_subtopic": "S006",
+    "gold_event": "E013"
+  },
+  "dummy-E013-3": {
+    "gold_topic": "T003",
+    "gold_subtopic": "S006",
+    "gold_event": "E013"
+  },
+  "dummy-E013-4": {
+    "gold_topic": "T003",
+    "gold_subtopic": "S006",
+    "gold_event": "E013"
+  },
+  "dummy-E013-5": {
+    "gold_topic": "T003",
+    "gold_subtopic": "S006",
+    "gold_event": "E013"
+  },
+  "dummy-E013-6": {
+    "gold_topic": "T003",
+    "gold_subtopic": "S006",
+    "gold_event": "E013"
+  },
+  "dummy-E014-0": {
+    "gold_topic": "T003",
+    "gold_subtopic": "S006",
+    "gold_event": "E013"
+  },
+  "dummy-E014-1": {
+    "gold_topic": "T003",
+    "gold_subtopic": "S006",
+    "gold_event": "E013"
+  },
+  "dummy-E014-2": {
+    "gold_topic": "T003",
+    "gold_subtopic": "S006",
+    "gold_event": "E013"
+  },
+  "dummy-E014-3": {
+    "gold_topic": "T003",
+    "gold_subtopic": "S006",
+    "gold_event": "E013"
+  },
+  "dummy-E014-4": {
+    "gold_topic": "T003",
+    "gold_subtopic": "S006",
+    "gold_event": "E013"
+  },
+  "dummy-E015-0": {
+    "gold_topic": "T003",
+    "gold_subtopic": "S006",
+    "gold_event": "E013"
+  },
+  "dummy-E015-1": {
+    "gold_topic": "T003",
+    "gold_subtopic": "S006",
+    "gold_event": "E013"
+  },
+  "dummy-E015-2": {
+    "gold_topic": "T003",
+    "gold_subtopic": "S006",
+    "gold_event": "E013"
+  },
+  "dummy-E015-3": {
+    "gold_topic": "T003",
+    "gold_subtopic": "S006",
+    "gold_event": "E013"
+  },
+  "dummy-E015-4": {
+    "gold_topic": "T003",
+    "gold_subtopic": "S006",
+    "gold_event": "E013"
+  },
+  "dummy-E016-0": {
+    "gold_topic": "T003",
+    "gold_subtopic": "S007",
+    "gold_event": "E016"
+  },
+  "dummy-E016-1": {
+    "gold_topic": "T003",
+    "gold_subtopic": "S007",
+    "gold_event": "E016"
+  },
+  "dummy-E016-2": {
+    "gold_topic": "T003",
+    "gold_subtopic": "S007",
+    "gold_event": "E016"
+  },
+  "dummy-E016-3": {
+    "gold_topic": "T003",
+    "gold_subtopic": "S007",
+    "gold_event": "E016"
+  },
+  "dummy-E016-4": {
+    "gold_topic": "T003",
+    "gold_subtopic": "S007",
+    "gold_event": "E016"
+  },
+  "dummy-E016-5": {
+    "gold_topic": "T003",
+    "gold_subtopic": "S007",
+    "gold_event": "E016"
+  },
+  "dummy-E016-6": {
+    "gold_topic": "T003",
+    "gold_subtopic": "S007",
+    "gold_event": "E016"
+  },
+  "dummy-E016-7": {
+    "gold_topic": "T003",
+    "gold_subtopic": "S007",
+    "gold_event": "E016"
+  },
+  "dummy-E017-0": {
+    "gold_topic": "T003",
+    "gold_subtopic": "S007",
+    "gold_event": "E017"
+  },
+  "dummy-E017-1": {
+    "gold_topic": "T003",
+    "gold_subtopic": "S007",
+    "gold_event": "E017"
+  },
+  "dummy-E017-2": {
+    "gold_topic": "T003",
+    "gold_subtopic": "S007",
+    "gold_event": "E017"
+  },
+  "dummy-E017-3": {
+    "gold_topic": "T003",
+    "gold_subtopic": "S007",
+    "gold_event": "E017"
+  },
+  "dummy-E017-4": {
+    "gold_topic": "T003",
+    "gold_subtopic": "S007",
+    "gold_event": "E017"
+  },
+  "dummy-E017-5": {
+    "gold_topic": "T003",
+    "gold_subtopic": "S007",
+    "gold_event": "E017"
+  },
+  "dummy-E017-6": {
+    "gold_topic": "T003",
+    "gold_subtopic": "S007",
+    "gold_event": "E017"
+  },
+  "dummy-E018-0": {
+    "gold_topic": "T003",
+    "gold_subtopic": "S008",
+    "gold_event": "E018"
+  },
+  "dummy-E018-1": {
+    "gold_topic": "T003",
+    "gold_subtopic": "S008",
+    "gold_event": "E018"
+  },
+  "dummy-E018-2": {
+    "gold_topic": "T003",
+    "gold_subtopic": "S008",
+    "gold_event": "E018"
+  },
+  "dummy-E018-3": {
+    "gold_topic": "T003",
+    "gold_subtopic": "S008",
+    "gold_event": "E018"
+  },
+  "dummy-E018-4": {
+    "gold_topic": "T003",
+    "gold_subtopic": "S008",
+    "gold_event": "E018"
+  },
+  "dummy-E018-5": {
+    "gold_topic": "T003",
+    "gold_subtopic": "S008",
+    "gold_event": "E018"
+  },
+  "dummy-E019-0": {
+    "gold_topic": "T004",
+    "gold_subtopic": "S009",
+    "gold_event": "E019"
+  },
+  "dummy-E019-1": {
+    "gold_topic": "T004",
+    "gold_subtopic": "S009",
+    "gold_event": "E019"
+  },
+  "dummy-E019-2": {
+    "gold_topic": "T004",
+    "gold_subtopic": "S009",
+    "gold_event": "E019"
+  },
+  "dummy-E019-3": {
+    "gold_topic": "T004",
+    "gold_subtopic": "S009",
+    "gold_event": "E019"
+  },
+  "dummy-E019-4": {
+    "gold_topic": "T004",
+    "gold_subtopic": "S009",
+    "gold_event": "E019"
+  },
+  "dummy-E019-5": {
+    "gold_topic": "T004",
+    "gold_subtopic": "S009",
+    "gold_event": "E019"
+  },
+  "dummy-E019-6": {
+    "gold_topic": "T004",
+    "gold_subtopic": "S009",
+    "gold_event": "E019"
+  },
+  "dummy-E020-0": {
+    "gold_topic": "T004",
+    "gold_subtopic": "S010",
+    "gold_event": "E020"
+  },
+  "dummy-E020-1": {
+    "gold_topic": "T004",
+    "gold_subtopic": "S010",
+    "gold_event": "E020"
+  },
+  "dummy-E020-2": {
+    "gold_topic": "T004",
+    "gold_subtopic": "S010",
+    "gold_event": "E020"
+  },
+  "dummy-E020-3": {
+    "gold_topic": "T004",
+    "gold_subtopic": "S010",
+    "gold_event": "E020"
+  },
+  "dummy-E020-4": {
+    "gold_topic": "T004",
+    "gold_subtopic": "S010",
+    "gold_event": "E020"
+  },
+  "dummy-E020-5": {
+    "gold_topic": "T004",
+    "gold_subtopic": "S010",
+    "gold_event": "E020"
+  },
+  "dummy-E021-0": {
+    "gold_topic": "T004",
+    "gold_subtopic": "S010",
+    "gold_event": "E021"
+  },
+  "dummy-E021-1": {
+    "gold_topic": "T004",
+    "gold_subtopic": "S010",
+    "gold_event": "E021"
+  },
+  "dummy-E021-2": {
+    "gold_topic": "T004",
+    "gold_subtopic": "S010",
+    "gold_event": "E021"
+  },
+  "dummy-E021-3": {
+    "gold_topic": "T004",
+    "gold_subtopic": "S010",
+    "gold_event": "E021"
+  },
+  "dummy-E021-4": {
+    "gold_topic": "T004",
+    "gold_subtopic": "S010",
+    "gold_event": "E021"
+  },
+  "dummy-E021-5": {
+    "gold_topic": "T004",
+    "gold_subtopic": "S010",
+    "gold_event": "E021"
+  },
+  "dummy-E022-0": {
+    "gold_topic": "T004",
+    "gold_subtopic": "S010",
+    "gold_event": "E022"
+  },
+  "dummy-E022-1": {
+    "gold_topic": "T004",
+    "gold_subtopic": "S010",
+    "gold_event": "E022"
+  },
+  "dummy-E022-2": {
+    "gold_topic": "T004",
+    "gold_subtopic": "S010",
+    "gold_event": "E022"
+  },
+  "dummy-E022-3": {
+    "gold_topic": "T004",
+    "gold_subtopic": "S010",
+    "gold_event": "E022"
+  },
+  "dummy-E022-4": {
+    "gold_topic": "T004",
+    "gold_subtopic": "S010",
+    "gold_event": "E022"
+  },
+  "dummy-E023-0": {
+    "gold_topic": "T004",
+    "gold_subtopic": "S011",
+    "gold_event": "E023"
+  },
+  "dummy-E023-1": {
+    "gold_topic": "T004",
+    "gold_subtopic": "S011",
+    "gold_event": "E023"
+  },
+  "dummy-E023-2": {
+    "gold_topic": "T004",
+    "gold_subtopic": "S011",
+    "gold_event": "E023"
+  },
+  "dummy-E023-3": {
+    "gold_topic": "T004",
+    "gold_subtopic": "S011",
+    "gold_event": "E023"
+  },
+  "dummy-E023-4": {
+    "gold_topic": "T004",
+    "gold_subtopic": "S011",
+    "gold_event": "E023"
+  },
+  "dummy-E023-5": {
+    "gold_topic": "T004",
+    "gold_subtopic": "S011",
+    "gold_event": "E023"
+  },
+  "dummy-E023-6": {
+    "gold_topic": "T004",
+    "gold_subtopic": "S011",
+    "gold_event": "E023"
+  },
+  "dummy-E024-0": {
+    "gold_topic": "T004",
+    "gold_subtopic": "S011",
+    "gold_event": "E024"
+  },
+  "dummy-E024-1": {
+    "gold_topic": "T004",
+    "gold_subtopic": "S011",
+    "gold_event": "E024"
+  },
+  "dummy-E024-2": {
+    "gold_topic": "T004",
+    "gold_subtopic": "S011",
+    "gold_event": "E024"
+  },
+  "dummy-E024-3": {
+    "gold_topic": "T004",
+    "gold_subtopic": "S011",
+    "gold_event": "E024"
+  },
+  "dummy-E024-4": {
+    "gold_topic": "T004",
+    "gold_subtopic": "S011",
+    "gold_event": "E024"
+  },
+  "dummy-E024-5": {
+    "gold_topic": "T004",
+    "gold_subtopic": "S011",
+    "gold_event": "E024"
+  },
+  "dummy-E025-0": {
+    "gold_topic": "T005",
+    "gold_subtopic": "S012",
+    "gold_event": "E025"
+  },
+  "dummy-E025-1": {
+    "gold_topic": "T005",
+    "gold_subtopic": "S012",
+    "gold_event": "E025"
+  },
+  "dummy-E025-2": {
+    "gold_topic": "T005",
+    "gold_subtopic": "S012",
+    "gold_event": "E025"
+  },
+  "dummy-E025-3": {
+    "gold_topic": "T005",
+    "gold_subtopic": "S012",
+    "gold_event": "E025"
+  },
+  "dummy-E025-4": {
+    "gold_topic": "T005",
+    "gold_subtopic": "S012",
+    "gold_event": "E025"
+  },
+  "dummy-E025-5": {
+    "gold_topic": "T005",
+    "gold_subtopic": "S012",
+    "gold_event": "E025"
+  },
+  "dummy-E025-6": {
+    "gold_topic": "T005",
+    "gold_subtopic": "S012",
+    "gold_event": "E025"
+  },
+  "dummy-E026-0": {
+    "gold_topic": "T005",
+    "gold_subtopic": "S012",
+    "gold_event": "E026"
+  },
+  "dummy-E026-1": {
+    "gold_topic": "T005",
+    "gold_subtopic": "S012",
+    "gold_event": "E026"
+  },
+  "dummy-E026-2": {
+    "gold_topic": "T005",
+    "gold_subtopic": "S012",
+    "gold_event": "E026"
+  },
+  "dummy-E026-3": {
+    "gold_topic": "T005",
+    "gold_subtopic": "S012",
+    "gold_event": "E026"
+  },
+  "dummy-E026-4": {
+    "gold_topic": "T005",
+    "gold_subtopic": "S012",
+    "gold_event": "E026"
+  },
+  "dummy-E026-5": {
+    "gold_topic": "T005",
+    "gold_subtopic": "S012",
+    "gold_event": "E026"
+  },
+  "dummy-E027-0": {
+    "gold_topic": "T005",
+    "gold_subtopic": "S013",
+    "gold_event": "E027"
+  },
+  "dummy-E027-1": {
+    "gold_topic": "T005",
+    "gold_subtopic": "S013",
+    "gold_event": "E027"
+  },
+  "dummy-E027-2": {
+    "gold_topic": "T005",
+    "gold_subtopic": "S013",
+    "gold_event": "E027"
+  },
+  "dummy-E027-3": {
+    "gold_topic": "T005",
+    "gold_subtopic": "S013",
+    "gold_event": "E027"
+  },
+  "dummy-E027-4": {
+    "gold_topic": "T005",
+    "gold_subtopic": "S013",
+    "gold_event": "E027"
+  },
+  "dummy-E027-5": {
+    "gold_topic": "T005",
+    "gold_subtopic": "S013",
+    "gold_event": "E027"
+  },
+  "dummy-E027-6": {
+    "gold_topic": "T005",
+    "gold_subtopic": "S013",
+    "gold_event": "E027"
+  },
+  "dummy-E027-7": {
+    "gold_topic": "T005",
+    "gold_subtopic": "S013",
+    "gold_event": "E027"
+  },
+  "dummy-E028-0": {
+    "gold_topic": "T005",
+    "gold_subtopic": "S013",
+    "gold_event": "E028"
+  },
+  "dummy-E028-1": {
+    "gold_topic": "T005",
+    "gold_subtopic": "S013",
+    "gold_event": "E028"
+  },
+  "dummy-E028-2": {
+    "gold_topic": "T005",
+    "gold_subtopic": "S013",
+    "gold_event": "E028"
+  },
+  "dummy-E028-3": {
+    "gold_topic": "T005",
+    "gold_subtopic": "S013",
+    "gold_event": "E028"
+  },
+  "dummy-E028-4": {
+    "gold_topic": "T005",
+    "gold_subtopic": "S013",
+    "gold_event": "E028"
+  },
+  "dummy-E028-5": {
+    "gold_topic": "T005",
+    "gold_subtopic": "S013",
+    "gold_event": "E028"
+  },
+  "dummy-E029-0": {
+    "gold_topic": "T005",
+    "gold_subtopic": "S014",
+    "gold_event": "E029"
+  },
+  "dummy-E029-1": {
+    "gold_topic": "T005",
+    "gold_subtopic": "S014",
+    "gold_event": "E029"
+  },
+  "dummy-E029-2": {
+    "gold_topic": "T005",
+    "gold_subtopic": "S014",
+    "gold_event": "E029"
+  },
+  "dummy-E029-3": {
+    "gold_topic": "T005",
+    "gold_subtopic": "S014",
+    "gold_event": "E029"
+  },
+  "dummy-E029-4": {
+    "gold_topic": "T005",
+    "gold_subtopic": "S014",
+    "gold_event": "E029"
+  },
+  "dummy-E029-5": {
+    "gold_topic": "T005",
+    "gold_subtopic": "S014",
+    "gold_event": "E029"
+  },
+  "dummy-E029-6": {
+    "gold_topic": "T005",
+    "gold_subtopic": "S014",
+    "gold_event": "E029"
+  }
+}

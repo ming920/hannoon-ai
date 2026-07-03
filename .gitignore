@@ -19,4 +19,5 @@ data/*.db-wal
 .claude/settings.local.json
 .claude/*.local.json
 .claude/agent-memory/
+.claude/worktrees/
 .DS_Store

@@ -1,0 +1,284 @@
+# 평가 하네스 (eval/)
+
+더미 데이터 기반 클러스터링 품질 측정 및 반복 개선 도구.  
+**기사 → 이벤트 → 서브토픽 → 토픽** 3단 파이프라인의 분류 품질을  
+정답 라벨 대비 정량 지표(ARI, NMI, B-cubed F1 등)로 자동 측정한다.
+
+---
+
+## 사전 요건
+
+### 1. 로컬 pgvector DB 기동
+
+**권장 방법: Supabase CLI** — 전체 마이그레이션(트리거 포함)이 자동 적용된다.
+
+```powershell
+# Supabase CLI 설치 후 hannoon-supabase/ 디렉터리에서
+supabase start
+# → DB URL 출력: postgresql://postgres:postgres@localhost:54322/postgres
+```
+
+> **bare docker pgvector 사용 시 주의**: `update_event_counts_on_article_insert`
+> 트리거가 없어 `events.article_count` 가 0 에 머물 수 있다.
+> `run_iteration.py` 가 `classify_events` 직후 article_count 를 실제 행 수로
+> 재동기화하여 이를 방어하지만, 가능하면 `supabase start` 를 사용할 것을 권장한다.
+
+```powershell
+# 차선책 — bare docker pgvector (트리거 없음, run_iteration 이 재동기화함)
+docker run -d --name hannoon-pg \
+  -e POSTGRES_PASSWORD=postgres \
+  -p 5432:5432 \
+  pgvector/pgvector:pg16
+# 이후 hannoon-supabase/supabase/migrations 를 psql 로 수동 적용
+```
+
+### 2. 환경변수 설정 (`.env`)
+
+```dotenv
+# Upstage API 키 (임베딩 + LLM 실제 호출 — generate_dummy --dry-run 시 불필요)
+UPSTAGE_API_KEY=up_...
+
+# 로컬 pgvector 연결 URL
+DATABASE_URL=postgresql://postgres:postgres@localhost:54322/postgres
+```
+
+### 3. Python 의존성 설치
+
+```powershell
+pip install -r hannoon-ai/requirements.txt
+```
+
+---
+
+## 전체 실행 흐름
+
+### 단계 0 — 더미 데이터 준비 (최초 1회 또는 데이터 변경 시)
+
+```powershell
+# 1. gold_taxonomy.json 설계 (인간 협업 지점)
+#    eval/taxonomy/gold_taxonomy.json 에 정답 트리를 작성한다.
+
+# 2a. LLM 없이 결정적 플레이스홀더 생성 (API 키 불필요 — 개발·테스트용)
+python eval/generate_dummy.py --dry-run
+
+# 2b. 실제 Upstage LLM 으로 기사 생성 (UPSTAGE_API_KEY 필요)
+python eval/generate_dummy.py
+
+# 이벤트 수 제한 (저비용 스모크 테스트 — taxonomy 에서 N 개 이벤트만 처리)
+python eval/generate_dummy.py --dry-run --limit-events 3
+
+# 경로 명시 (기본값: eval/taxonomy/gold_taxonomy.json → eval/data/)
+python eval/generate_dummy.py \
+  --taxonomy eval/taxonomy/gold_taxonomy.json \
+  --out-dir  eval/data \
+  --dry-run
+```
+
+출력: `eval/data/dummy_articles.json`, `eval/data/gold_labels.json`
+
+### 단계 1 — 한 사이클 실행
+
+```powershell
+python eval/run_iteration.py \
+  --database-url "postgresql://postgres:postgres@localhost:54322/postgres" \
+  --run-id       run-001 \
+  --config-tag   "baseline-threshold-045"
+```
+
+`run_iteration.py` 내부 실행 순서:
+
+| # | 내용 | 주요 동작 |
+|---|---|---|
+| 1 | `eval/reset_test_db.py --yes` | 분류기 출력 초기화 |
+| 2 | `eval/ingest_dummy.py` | 더미 기사 DB 주입 |
+| 3 | `classify_events.py` (EVENT_BATCH_SIZE=N) | 이벤트 분류 — 전량 드레인 |
+| 4 | [인-프로세스] article_count 재동기화 | 트리거 없는 DB 방어 |
+| 5 | `classify_topics.py` (TOPIC_BATCH_SIZE=N, TOPIC_SUBTOPICS_ENABLED=true) | 토픽 분류 |
+| 6 | `eval/evaluate.py` | 지표 산출 → results/ 저장 |
+
+### 단계 2 — 파라미터 튜닝 후 재실행
+
+```powershell
+# 임계값을 낮춰 재실행 (이벤트 over-create 감소 목표)
+EVENT_DISTANCE_THRESHOLD=0.40 python eval/run_iteration.py \
+  --database-url "postgresql://..." \
+  --run-id       run-002 \
+  --config-tag   "threshold-040"
+```
+
+---
+
+## 하네스 신뢰성 자기검증 (오라클 테스트)
+
+파이프라인을 실행하기 전에 **지표 계산 자체가 올바른지** 먼저 검증한다.  
+이 두 테스트를 먼저 통과시켜야 metrics.py 버그로 인한 잘못된 개선 판단을 방지할 수 있다.
+
+### 오라클 테스트 (3레벨 모두 ARI = B-cubed F1 = 1.0 이어야 함)
+
+gold_labels 를 그대로 예측값으로 사용하면 모든 레벨의 지표가 1.0 이 나와야 한다.  
+`--use-gold-as-pred` 플래그는 **DB 연결 없이** gold_labels.json 만으로 수행한다 (구현 완료).
+
+```powershell
+python eval/evaluate.py `
+    --use-gold-as-pred `
+    --gold eval/data/gold_labels.json `
+    --run-id oracle-test --config-tag oracle
+
+# 기대(검증됨): 이벤트/서브토픽/토픽 3레벨 모두 ARI=1.0000, bcubed_f1=1.0000, 계층 정합성=1.0000
+```
+
+### 랜덤 테스트 (지표가 무작위 배정에 민감한지 확인)
+
+```powershell
+python eval/evaluate.py `
+    --random-pred --seed 42 `
+    --gold eval/data/gold_labels.json `
+    --run-id random-test --config-tag random
+
+# 기대(검증됨): ARI << 1.0 (예: 0.25 / -0.15), bcubed_f1 도 1.0 미만 — 지표가 품질에 민감함을 확인
+```
+
+---
+
+## results/ 디렉터리 구조
+
+```
+eval/results/
+  metrics.csv          # 실행별 지표 누적 테이블 (한 줄 = 한 실행)
+  run-001.md           # 실행별 상세 리포트
+  run-002.md
+  ...
+```
+
+### metrics.csv 열 설명
+
+아래 컬럼명은 `evaluate.py` 의 `CSV_COLUMNS` 리스트에서 직접 추출한 값이다.
+
+| 열 | 설명 |
+|---|---|
+| `run_id` | 실행 식별자 (`--run-id` 인자) |
+| `config_tag` | 파라미터/프롬프트 구성 태그 |
+| `timestamp` | 실행 시각 (UTC ISO8601) |
+| `coverage_event` | 이벤트 레벨: gold 기사 중 예측 이벤트가 배정된 비율 |
+| `ari_event` | 이벤트 레벨: Adjusted Rand Index |
+| `nmi_event` | 이벤트 레벨: Normalized Mutual Information |
+| `v_measure_event` | 이벤트 레벨: V-measure |
+| `bcubed_f1_event` | 이벤트 레벨: B-cubed F1 (핵심 지표) |
+| `singleton_rate_event` | 이벤트 레벨: 단일기사 이벤트 비율 (낮을수록 over-create 개선) |
+| `over_split_event` | 이벤트 레벨: over-split 이벤트 수 |
+| `coverage_subtopic` | 서브토픽 레벨: coverage |
+| `ari_subtopic` | 서브토픽 레벨: ARI |
+| `nmi_subtopic` | 서브토픽 레벨: NMI |
+| `v_measure_subtopic` | 서브토픽 레벨: V-measure |
+| `bcubed_f1_subtopic` | 서브토픽 레벨: B-cubed F1 |
+| `coverage_topic` | 토픽 레벨: coverage |
+| `ari_topic` | 토픽 레벨: ARI |
+| `nmi_topic` | 토픽 레벨: NMI |
+| `v_measure_topic` | 토픽 레벨: V-measure |
+| `bcubed_f1_topic` | 토픽 레벨: B-cubed F1 |
+| `hierarchy_consistency` | 계층 정합성: 서브토픽→토픽 관계 일치율 |
+
+### 레벨별 지표 의미
+
+- **이벤트 레벨**: 각 기사가 올바른 이벤트로 묶였는지 측정.
+  `singleton_rate_event`(낮을수록)와 `bcubed_f1_event`(높을수록)이 핵심.
+- **서브토픽 레벨**: 이벤트가 올바른 서브토픽으로 묶였는지 측정.
+  `TOPIC_SUBTOPICS_ENABLED=true` 일 때만 의미 있음.
+- **토픽 레벨**: 이벤트가 올바른 최상위 토픽으로 묶였는지 측정.
+- **계층 정합성**: 각 이벤트의 `(서브토픽 → 부모 토픽)` 예측이
+  정답 `(gold_subtopic → gold_topic)` 관계와 일치하는 비율.
+
+### 실행 결과 비교 예시
+
+```powershell
+python -c "
+import csv
+with open('eval/results/metrics.csv') as f:
+    for row in csv.DictReader(f):
+        print(row['run_id'], row['config_tag'],
+              'bcubed_f1_event=', row['bcubed_f1_event'],
+              'singleton%=',      row['singleton_rate_event'])
+"
+```
+
+---
+
+## 반복 개선 방법
+
+### 튜닝 가능한 파라미터 (환경변수)
+
+`src/event_classifier/settings.py` 와 `src/topic_classifier/settings.py` 에서 기본값 확인.
+
+| 환경변수 | 기본값 | 설명 |
+|---|---|---|
+| `EVENT_DISTANCE_THRESHOLD` | 0.45 | 이벤트 후보 검색 거리 임계값 (낮을수록 엄격) |
+| `EVENT_ASSIGN_SCORE_THRESHOLD` | 0.75 | assign 결정 최소 점수 |
+| `EVENT_TOP_K` | (설정값) | pgvector 후보 검색 수 |
+| `TOPIC_DISTANCE_THRESHOLD` | 0.50 | 토픽 후보 검색 거리 임계값 |
+| `TOPIC_MIN_NET_ARTICLE_COUNT` | 5 | 토픽 분류 대상 이벤트 최소 기사 수 |
+| `TOPIC_SUBTOPICS_ENABLED` | false | 서브토픽(3단 계층) 활성화 (`run_iteration` 이 자동 주입) |
+
+### 프롬프트 파일 위치
+
+| 파일 | 역할 |
+|---|---|
+| `src/event_classifier/prompts.py` | 이벤트 추출·assign 판단 프롬프트 |
+| `src/topic_classifier/prompts.py` | 토픽 cause/result 추출·assign 프롬프트 |
+
+over-create 를 줄이려면 `prompts.py` 의 assign 판단 지침을 강화하고
+`EVENT_DISTANCE_THRESHOLD` 를 낮춰 더 많은 후보를 확보한다.
+
+### 개선 사이클 예시
+
+```powershell
+# 베이스라인
+python eval/run_iteration.py --database-url "postgresql://..." \
+  --run-id run-001 --config-tag "baseline"
+
+# 임계값 조정
+EVENT_DISTANCE_THRESHOLD=0.40 python eval/run_iteration.py \
+  --database-url "postgresql://..." \
+  --run-id run-002 --config-tag "threshold-040"
+
+# 프롬프트 수정 후
+python eval/run_iteration.py --database-url "postgresql://..." \
+  --run-id run-003 --config-tag "prompt-v2-assign"
+```
+
+---
+
+## 규모 단계적 확장 절차
+
+| 단계 | 기사 수 | 정답 이벤트 수 | 목적 |
+|---|---|---|---|
+| **소규모** | ~60건 | ~8개 | 하네스·지표 동작 검증 (빠르고 저렴) |
+| **중규모** | ~300건 | ~40개 | 지표 신뢰도 확인, 개선 신호 검증 |
+| **대규모** | 1,000건+ | 100개+ | 실운영 근접 품질 측정 |
+
+각 단계에서 지표가 기대 방향으로 움직이는지 확인한 뒤 다음 단계로 확장한다.
+
+대규모 실행 전에 `src/embedding.py` 에 텍스트 해시 기반 임베딩 캐시를 추가하면
+동일 텍스트 재실행 시 임베딩 API 비용을 절감할 수 있다 (임베딩은 결정적).
+
+---
+
+## 파일 구조
+
+```
+eval/
+  taxonomy/
+    gold_taxonomy.json       # 정답 트리 (인간 설계 — JSON 형식)
+  data/
+    dummy_articles.json      # generate_dummy.py 출력
+    gold_labels.json         # article_guid → {gold_topic, gold_subtopic, gold_event}
+  results/
+    metrics.csv              # 실행별 지표 누적 (CSV_COLUMNS 순서)
+    <run-id>.md              # 실행별 상세 리포트
+  generate_dummy.py          # taxonomy → (LLM 또는 --dry-run) → dummy + gold
+  ingest_dummy.py            # 더미 기사 DB 주입 (guid 중복 검사로 멱등)
+  reset_test_db.py           # 분류기 출력 초기화 (3중 안전 가드)
+  metrics.py                 # 레벨별 지표 계산 (순수 함수)
+  evaluate.py                # DB 예측 읽기 + gold 비교 → 리포트 + CSV 행 추가
+  run_iteration.py           # 전체 사이클 오케스트레이션
+  README.md                  # 이 파일
+```
