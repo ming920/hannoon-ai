@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import os
 import sys
 
 from db import events, topics, topic_causes
 from embedding import embed_passage, embed_query, to_vector_literal
 from openai_client.client import LLMClient
 from topic_classifier.prompts import (
+    build_parent_topic_assignment_prompt,
     build_subtopic_assignment_prompt,
     build_topic_assignment_prompt,
     build_topic_cause_result_prompt,
@@ -148,6 +150,10 @@ def _resolve_action(client, candidates, build_prompt, *, fallback_title, fallbac
             ),
         }
         action = "create"
+    if action == "create":
+        # LLM이 new_title을 누락하면 KeyError, null이면 "None" 제목 토픽이 생기므로
+        # 모든 create 경로에서 fallback_title로 보정한다.
+        decision["new_title"] = str(decision.get("new_title") or fallback_title).strip()
     return action, decision
 
 
@@ -300,11 +306,22 @@ def _assign_hierarchical(
         top_k,
         roots_only=True,
     )
+    # PARENT_PROMPT_MODE 환경변수로 A/B 테스트용 프롬프트를 선택한다.
+    # "strict" → 기존 엄격 프롬프트(build_topic_assignment_prompt),
+    # 그 외(기본값 "broad") → 광의 테마 프롬프트(build_parent_topic_assignment_prompt).
+    # 이 변수는 .env 에 넣지 않으므로, 프로세스 환경변수 주입이 그대로 유효하다.
+    _parent_prompt_mode = os.getenv("PARENT_PROMPT_MODE", "broad")
     parent_action, parent_decision = _resolve_action(
         client,
         parent_candidates,
-        lambda: build_topic_assignment_prompt(ev.title, ev.summary, cause, result, parent_candidates),
-        fallback_title=ev.title,
+        lambda: (
+            build_topic_assignment_prompt(ev.title, ev.summary, cause, result, parent_candidates)
+            if _parent_prompt_mode == "strict"
+            else build_parent_topic_assignment_prompt(ev.title, ev.summary, cause, result, parent_candidates)
+        ),
+        # 부모 폴백 제목은 이벤트 제목(30자 절단 문장)이 아니라 cause 명사구를 쓴다.
+        # 부모는 여러 사건을 담는 넓은 주제이므로 명사구가 제목으로 더 적합하다.
+        fallback_title=cause or ev.title,
     )
 
     # 2) 서브토픽 후보 검색 — 부모가 기존 토픽일 때만 부모 스코프로 좁혀 검색한다.
@@ -482,7 +499,10 @@ def run(
             print(f"[topic] event {ev.id} -> {label}")
 
         except Exception as exc:
+            # FETCH_UNASSIGNED가 created_at ASC라 break하면 결정적으로 실패하는
+            # 이벤트 하나가 이후 배치 전체를 영구 정지시킨다. 이벤트 분류기처럼
+            # 해당 이벤트만 건너뛰고 나머지를 계속 처리한다.
             print(f"[topic] event {ev.id} failed: {exc}", file=sys.stderr)
-            break
+            continue
 
     return processed

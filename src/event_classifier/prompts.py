@@ -206,8 +206,10 @@ def _format_summary_articles(article_summaries: list[dict]) -> str:
     if not article_summaries:
         return "(요약 없음)"
 
+    # 목록은 article id ASC + 새 기사가 마지막에 append되므로,
+    # 최신 N건을 남겨야 방금 추가된 기사가 요약 프롬프트에서 잘리지 않는다.
     parts = []
-    for i, item in enumerate(article_summaries[:MAX_SUMMARY_ARTICLES], 1):
+    for i, item in enumerate(article_summaries[-MAX_SUMMARY_ARTICLES:], 1):
         parts.append(
             "\n".join(
                 [

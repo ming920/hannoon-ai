@@ -351,6 +351,27 @@ class ResolveActionTests(unittest.TestCase):
         )
         self.assertEqual(decision["reason"], "검색 후보 없음")
 
+    def test_create_missing_new_title_backfilled_with_fallback(self):
+        """LLM 이 create 에서 new_title 을 누락해도 KeyError 없이 fallback_title 로 보정되어야 한다."""
+        candidates = [_make_candidate(5)]
+        client = self._mock_client({"action": "create", "score": 0.2, "reason": "별도 사안"})
+        action, decision = _resolve_action(
+            client, candidates, lambda: "prompt", fallback_title="폴백제목"
+        )
+        self.assertEqual(action, "create")
+        self.assertEqual(decision["new_title"], "폴백제목")
+
+    def test_create_null_new_title_backfilled_with_fallback(self):
+        """LLM 이 new_title 을 null 로 반환하면 'None' 제목 대신 fallback_title 을 써야 한다."""
+        candidates = [_make_candidate(6)]
+        client = self._mock_client({
+            "action": "create", "new_title": None, "score": 0.2, "reason": "별도 사안",
+        })
+        _, decision = _resolve_action(
+            client, candidates, lambda: "prompt", fallback_title="폴백제목"
+        )
+        self.assertEqual(decision["new_title"], "폴백제목")
+
 
 # ── 6. pipeline._select_candidate — 후보 집합 검증 ────────────────────────────
 
@@ -419,6 +440,31 @@ class AssignHierarchicalTests(unittest.TestCase):
         # 반환 레이블에 create / leaf 200 이 포함되어야 한다
         self.assertIn("create", label)
         self.assertIn("200", label)
+
+    def test_new_parent_fallback_title_uses_cause(self):
+        """후보 0개로 부모를 새로 만들 때 제목은 이벤트 제목이 아니라 cause 명사구여야 한다."""
+        ev = _make_event()
+        client = MagicMock()
+        conn = FakePipelineConn()
+
+        patches = self._common_patches()
+        with patch(f"{_PATCH_BASE}.topic_causes.search_candidates", return_value=[]), \
+             patch(f"{_PATCH_BASE}.topics.create_topic", side_effect=[100, 200]) as mock_create, \
+             patch(f"{_PATCH_BASE}.topics.update_topic"):
+            for p in patches:
+                p.start()
+            try:
+                _assign_hierarchical(conn, client, ev, "전세 보증금 미반환", "결과텍스트", 5, 5)
+            finally:
+                for p in patches:
+                    p.stop()
+
+        # positional 호출: (conn, category, title, summary, parent_id)
+        parent_args = mock_create.call_args_list[0][0]
+        sub_args = mock_create.call_args_list[1][0]
+        self.assertEqual(parent_args[2], "전세 보증금 미반환")
+        # 서브토픽 폴백 제목은 기존대로 이벤트 제목을 유지한다
+        self.assertEqual(sub_args[2], ev.title)
 
     def test_existing_parent_new_sub_assigns_parent_creates_sub(self):
         """기존 부모에 배정되고 서브토픽 후보가 없으면 서브는 신규 생성되어야 한다."""
@@ -576,7 +622,7 @@ class RunPipelineTests(unittest.TestCase):
         self.assertEqual(call_args[6], 7)
 
     def test_run_returns_zero_on_exception(self):
-        """이벤트 처리 중 예외가 나면 break 하고 처리된 건수를 반환해야 한다."""
+        """이벤트 처리 중 예외가 나면 해당 이벤트를 건너뛰고 처리된 건수를 반환해야 한다."""
         ev = _make_event()
         client = self._mock_client({"cause": "원인", "result": "결과"})
         conn = FakePipelineConn()
@@ -587,6 +633,22 @@ class RunPipelineTests(unittest.TestCase):
             result = run(conn, min_net=1, batch_size=10, top_k=5, llm_model="m")
 
         self.assertEqual(result, 0)
+
+    def test_run_continues_after_event_failure(self):
+        """앞 이벤트가 실패해도 break 하지 않고 다음 이벤트를 계속 처리해야 한다(웨징 회귀)."""
+        ev1 = _make_event(event_id=1)
+        ev2 = _make_event(event_id=2)
+        client = self._mock_client({"cause": "원인", "result": "결과"})
+        conn = FakePipelineConn()
+
+        with patch(f"{_PATCH_BASE}.events.fetch_unassigned", return_value=[ev1, ev2]), \
+             patch(f"{_PATCH_BASE}._get_client", return_value=client), \
+             patch(f"{_PATCH_BASE}._assign_flat",
+                   side_effect=[RuntimeError("DB 오류"), "create"]) as mock_flat:
+            result = run(conn, min_net=1, batch_size=10, top_k=5, llm_model="m")
+
+        self.assertEqual(result, 1)
+        self.assertEqual(mock_flat.call_count, 2)
 
 
 # ── 9. topic_classifier.prompts.build_subtopic_assignment_prompt ──────────────
@@ -640,6 +702,17 @@ class SubtopicPromptTests(unittest.TestCase):
         prompt = self._build()
         self.assertIn('"action": "assign"', prompt)
         self.assertIn('"action": "create"', prompt)
+
+    def test_prompt_defines_subtopic_as_multi_event_branch(self):
+        """서브토픽을 개별 사건이 아닌 여러 관련 사건을 담는 중간 갈래로 정의해야 한다(싱글턴 회귀 방지)."""
+        prompt = self._build()
+        self.assertIn("여러 관련 사건", prompt)
+        self.assertIn("구체적 사건·절차 단계가 서로 달라도 assign", prompt)
+
+    def test_prompt_bans_guardrail_markers_in_assign_reason(self):
+        """assign 사유에 가드레일 부정 마커 표현을 금지하는 지시가 있어야 한다."""
+        prompt = self._build()
+        self.assertIn("같은 표현을 쓰지 마세요", prompt)
 
 
 # ── 10. settings — SUBTOPICS_ENABLED 환경변수 파싱 ────────────────────────────
