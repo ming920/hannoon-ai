@@ -42,7 +42,10 @@ from topic_classifier.pipeline import (
     run,
 )
 import topic_classifier.settings as topic_settings
-from topic_classifier.prompts import build_subtopic_assignment_prompt
+from topic_classifier.prompts import (
+    build_parent_topic_assignment_prompt,
+    build_subtopic_assignment_prompt,
+)
 
 
 # ── 헬퍼: DB 가짜 객체 ────────────────────────────────────────────────────────
@@ -838,6 +841,40 @@ class SubtopicsSettingsTests(unittest.TestCase):
         importlib.reload(s)
 
 
+# ── 10-1. topic_classifier.prompts.build_parent_topic_assignment_prompt ──────
+
+class ParentPromptTests(unittest.TestCase):
+    """광의 부모 토픽 프롬프트의 핵심 요소를 검증 (리뷰 R-테스트갭 반영)."""
+
+    def _build(self, candidates=None):
+        return build_parent_topic_assignment_prompt(
+            title="한미 반도체 공급망 MOU 체결",
+            summary="한국과 미국이 반도체 공급망 협력 MOU를 체결했다.",
+            cause="반도체 공급망 협력 필요성",
+            result="한미 반도체 공급망 MOU가 체결됐다.",
+            candidates=candidates or [],
+        )
+
+    def test_contains_event_and_broad_theme_rules(self):
+        """이벤트 정보와 '넓은 주제' 판단 기준이 프롬프트에 있어야 한다."""
+        prompt = self._build()
+        self.assertIn("한미 반도체 공급망 MOU 체결", prompt)
+        self.assertIn("넓은 주제", prompt)
+        self.assertIn("구체적 사건이 서로 달라도 assign", prompt)
+
+    def test_contains_action_formats_and_candidate_fallback(self):
+        """assign/create 형식 지시와 후보 없음 문구가 있어야 한다."""
+        prompt = self._build()
+        self.assertIn('"action": "assign"', prompt)
+        self.assertIn('"action": "create"', prompt)
+        self.assertIn("검색된 후보 없음", prompt)
+
+    def test_bans_guardrail_markers_in_assign_reason(self):
+        """가드레일 부정 마커 표현 금지 지시가 있어야 한다 (강등 오탐 방지)."""
+        prompt = self._build()
+        self.assertIn("같은 표현을 쓰지 마세요", prompt)
+
+
 # ── 11. pipeline._assign_subtopic_by_embedding — 임베딩 최근접 서브 배정 ──────
 
 class AssignSubtopicByEmbeddingTests(unittest.TestCase):
@@ -891,6 +928,29 @@ class AssignSubtopicByEmbeddingTests(unittest.TestCase):
         """부모 아래 서브토픽이 하나도 없으면 create 해야 한다."""
         conn = FakeQueryOneConn([{"embedding": "[0.1,0.2]"}, None])
         action, _, chosen = _assign_subtopic_by_embedding(conn, _make_event(), 10)
+        self.assertEqual(action, "create")
+        self.assertIsNone(chosen)
+
+    def test_similarity_exactly_at_threshold_assigns(self):
+        """sim == 임계값(경계)이면 assign이어야 한다 (>= 비교, 리뷰 R-테스트갭 반영)."""
+        conn = FakeQueryOneConn([
+            {"embedding": "[0.1,0.2]"},
+            {"leaf_id": 20, "sim": 0.55},
+            {"id": 20, "category": "사회", "title": "서브제목", "summary": "서브요약"},
+        ])
+        with patch(f"{_PATCH_BASE}.SUBTOPIC_SIM_THRESHOLD", 0.55):
+            action, _, chosen = _assign_subtopic_by_embedding(conn, _make_event(), 10)
+        self.assertEqual(action, "assign")
+        self.assertEqual(chosen.topic_id, 20)
+
+    def test_nan_similarity_falls_back_to_create(self):
+        """sim이 NaN(영벡터 등)이면 assign으로 새지 않고 create 해야 한다."""
+        conn = FakeQueryOneConn([
+            {"embedding": "[0.0,0.0]"},
+            {"leaf_id": 20, "sim": float("nan")},
+        ])
+        with patch(f"{_PATCH_BASE}.SUBTOPIC_SIM_THRESHOLD", 0.55):
+            action, _, chosen = _assign_subtopic_by_embedding(conn, _make_event(), 10)
         self.assertEqual(action, "create")
         self.assertIsNone(chosen)
 

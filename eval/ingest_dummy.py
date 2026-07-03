@@ -70,7 +70,7 @@ def _ingest_one(conn, art: dict) -> str:
                 feed_url, guid, link, category, title, summary, content,
                 content_source, publisher, published_at, bias_type, status,
                 created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?::category, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 "eval://dummy",                          # feed_url — 더미 데이터 마커

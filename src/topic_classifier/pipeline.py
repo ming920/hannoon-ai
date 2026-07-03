@@ -214,7 +214,8 @@ def _assign_subtopic_by_embedding(conn, ev, parent_id):
     if nearest is None:
         return _create("부모 스코프 내 서브토픽 없음")
     sim = float(nearest["sim"])
-    if sim < SUBTOPIC_SIM_THRESHOLD:
+    # NaN(영벡터 임베딩 등) 은 비교가 항상 False가 되므로 not >= 형태로 create에 흡수한다.
+    if not (sim >= SUBTOPIC_SIM_THRESHOLD):
         return _create(
             f"최근접 서브토픽 유사도 {sim:.3f} < {SUBTOPIC_SIM_THRESHOLD} — 새 갈래로 생성"
         )
@@ -389,13 +390,13 @@ def _assign_hierarchical(
     # "strict" → 기존 엄격 프롬프트(build_topic_assignment_prompt),
     # 그 외(기본값 "broad") → 광의 테마 프롬프트(build_parent_topic_assignment_prompt).
     # 이 변수는 .env 에 넣지 않으므로, 프로세스 환경변수 주입이 그대로 유효하다.
-    _parent_prompt_mode = os.getenv("PARENT_PROMPT_MODE", "broad")
+    parent_prompt_mode = os.getenv("PARENT_PROMPT_MODE", "broad")
     parent_action, parent_decision = _resolve_action(
         client,
         parent_candidates,
         lambda: (
             build_topic_assignment_prompt(ev.title, ev.summary, cause, result, parent_candidates)
-            if _parent_prompt_mode == "strict"
+            if parent_prompt_mode == "strict"
             else build_parent_topic_assignment_prompt(ev.title, ev.summary, cause, result, parent_candidates)
         ),
         # 부모 폴백 제목은 이벤트 제목(30자 절단 문장)이 아니라 cause 명사구를 쓴다.
