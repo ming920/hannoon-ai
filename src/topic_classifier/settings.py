@@ -21,12 +21,15 @@ ASSIGN_SCORE_THRESHOLD = float(os.environ.get("TOPIC_ASSIGN_SCORE_THRESHOLD", "0
 SUBTOPIC_ASSIGN_SCORE_THRESHOLD = float(
     os.environ.get("TOPIC_SUBTOPIC_ASSIGN_SCORE_THRESHOLD", str(ASSIGN_SCORE_THRESHOLD))
 )
-# 서브토픽 배정 방식: "llm"(기존 assign-or-create 프롬프트) 또는
-# "embedding"(이벤트 임베딩 코사인 최근접 — LLM 호출 없음, 결정론적).
-SUBTOPIC_MODE = os.environ.get("TOPIC_SUBTOPIC_MODE", "llm").strip().lower()
+# 서브토픽 배정 방식: "embedding"(이벤트 임베딩 코사인 최근접 — LLM 호출 없음,
+# 결정론적) 또는 "llm"(기존 assign-or-create 프롬프트).
+# embedding이 원본·홀드아웃 두 더미 세트 모두에서 llm을 상회해 기본값으로 채택
+# (홀드아웃 검증 holdout-emb065-1: covered P 0.926/F1 0.812/om 1 vs llm F1 0.557).
+SUBTOPIC_MODE = os.environ.get("TOPIC_SUBTOPIC_MODE", "embedding").strip().lower()
 # embedding 모드에서 기존 서브토픽에 편입하기 위한 최소 코사인 유사도.
-# 오프라인 스위프(2026-07-03) 기준 0.45~0.60이 플래토, 0.55에서 P 0.926/om 1.
-SUBTOPIC_SIM_THRESHOLD = float(os.environ.get("TOPIC_SUBTOPIC_SIM_THRESHOLD", "0.55"))
+# 두 데이터셋 동시 스위프 기준 0.65가 강건점(0.65~0.70 플래토): 원본 P 1.00/om 0,
+# 홀드아웃 P 0.93/om 1. 0.55는 홀드아웃에서 과병합(P 0.58)이라 기각.
+SUBTOPIC_SIM_THRESHOLD = float(os.environ.get("TOPIC_SUBTOPIC_SIM_THRESHOLD", "0.65"))
 LLM_MODEL = os.environ.get(
     "LLM_TOPIC_MODEL",
     os.environ.get("LLM_TOPIC_EVENT_MODEL", os.environ.get("LLM_DEFAULT_MODEL", "solar-mini")),

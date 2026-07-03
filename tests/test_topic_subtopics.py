@@ -1015,23 +1015,28 @@ class SubtopicThresholdSettingsTests(unittest.TestCase):
             s = self._reload_settings()
             self.assertAlmostEqual(s.SUBTOPIC_ASSIGN_SCORE_THRESHOLD, 0.85)
 
-    def test_subtopic_mode_defaults_to_llm(self):
-        """SUBTOPIC_MODE 미지정 시 기존 LLM 방식이어야 한다(프로덕션 동작 불변)."""
+    def test_subtopic_mode_defaults_to_embedding(self):
+        """SUBTOPIC_MODE 미지정 시 embedding이어야 한다 (홀드아웃 검증 후 기본 채택).
+
+        원본·홀드아웃 두 세트 모두에서 llm 대비 우위 확인 (holdout-emb065-1:
+        covered P 0.926/F1 0.812 vs llm F1 0.557). TOPIC_SUBTOPICS_ENABLED
+        기본 false라 평면 모드 프로덕션에는 영향 없음.
+        """
         os.environ.pop("TOPIC_SUBTOPIC_MODE", None)
         s = self._reload_settings()
-        self.assertEqual(s.SUBTOPIC_MODE, "llm")
+        self.assertEqual(s.SUBTOPIC_MODE, "embedding")
 
     def test_subtopic_mode_env_override(self):
-        """TOPIC_SUBTOPIC_MODE=embedding 지정 시 embedding 모드여야 한다."""
-        with patch.dict(os.environ, {"TOPIC_SUBTOPIC_MODE": "Embedding"}):
+        """TOPIC_SUBTOPIC_MODE=llm 지정 시 기존 LLM 방식으로 되돌릴 수 있어야 한다."""
+        with patch.dict(os.environ, {"TOPIC_SUBTOPIC_MODE": "LLM"}):
             s = self._reload_settings()
-            self.assertEqual(s.SUBTOPIC_MODE, "embedding")
+            self.assertEqual(s.SUBTOPIC_MODE, "llm")
 
     def test_sim_threshold_default_and_override(self):
-        """SUBTOPIC_SIM_THRESHOLD 기본 0.55, env로 오버라이드 가능해야 한다."""
+        """SUBTOPIC_SIM_THRESHOLD 기본 0.65(두 데이터셋 강건점), env 오버라이드 가능."""
         os.environ.pop("TOPIC_SUBTOPIC_SIM_THRESHOLD", None)
         s = self._reload_settings()
-        self.assertAlmostEqual(s.SUBTOPIC_SIM_THRESHOLD, 0.55)
+        self.assertAlmostEqual(s.SUBTOPIC_SIM_THRESHOLD, 0.65)
         with patch.dict(os.environ, {"TOPIC_SUBTOPIC_SIM_THRESHOLD": "0.50"}):
             s = self._reload_settings()
             self.assertAlmostEqual(s.SUBTOPIC_SIM_THRESHOLD, 0.50)

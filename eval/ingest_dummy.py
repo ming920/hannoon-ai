@@ -151,8 +151,10 @@ def main() -> None:
             errors += 1
 
     conn.close()
+    # em-dash(U+2014)는 Windows cp949 콘솔에서 UnicodeEncodeError를 일으켜
+    # 주입 성공 후 마지막 출력에서 전체 단계가 실패 처리되므로 사용하지 않는다.
     print(
-        f"주입 완료 — 삽입: {inserted}건, 건너뜀(중복): {skipped}건, "
+        f"주입 완료 - 삽입: {inserted}건, 건너뜀(중복): {skipped}건, "
         f"오류: {errors}건  (전체: {len(articles)}건)"
     )
 
