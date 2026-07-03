@@ -21,6 +21,12 @@ ASSIGN_SCORE_THRESHOLD = float(os.environ.get("TOPIC_ASSIGN_SCORE_THRESHOLD", "0
 SUBTOPIC_ASSIGN_SCORE_THRESHOLD = float(
     os.environ.get("TOPIC_SUBTOPIC_ASSIGN_SCORE_THRESHOLD", str(ASSIGN_SCORE_THRESHOLD))
 )
+# 서브토픽 배정 방식: "llm"(기존 assign-or-create 프롬프트) 또는
+# "embedding"(이벤트 임베딩 코사인 최근접 — LLM 호출 없음, 결정론적).
+SUBTOPIC_MODE = os.environ.get("TOPIC_SUBTOPIC_MODE", "llm").strip().lower()
+# embedding 모드에서 기존 서브토픽에 편입하기 위한 최소 코사인 유사도.
+# 오프라인 스위프(2026-07-03) 기준 0.45~0.60이 플래토, 0.55에서 P 0.926/om 1.
+SUBTOPIC_SIM_THRESHOLD = float(os.environ.get("TOPIC_SUBTOPIC_SIM_THRESHOLD", "0.55"))
 LLM_MODEL = os.environ.get(
     "LLM_TOPIC_MODEL",
     os.environ.get("LLM_TOPIC_EVENT_MODEL", os.environ.get("LLM_DEFAULT_MODEL", "solar-mini")),

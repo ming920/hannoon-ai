@@ -4,6 +4,7 @@ import os
 import sys
 
 from db import events, topics, topic_causes
+from db.topic_causes import TopicCandidate
 from embedding import embed_passage, embed_query, to_vector_literal
 from openai_client.client import LLMClient
 from topic_classifier.prompts import (
@@ -18,6 +19,8 @@ from topic_classifier.settings import (
     DISTANCE_THRESHOLD,
     LLM_MODEL,
     SUBTOPIC_ASSIGN_SCORE_THRESHOLD,
+    SUBTOPIC_MODE,
+    SUBTOPIC_SIM_THRESHOLD,
 )
 from summary_utils import normalize_summary, normalize_topic_title
 
@@ -45,6 +48,24 @@ WHERE (t.parent_topic_id = ? OR t.id = ?)
   AND btrim(e.summary) <> ''
 ORDER BY e.created_at ASC, e.id ASC
 """
+
+# embedding 서브토픽 모드용: 새 이벤트의 저장 임베딩(이벤트 분류 단계에서 기록됨)을 읽는다.
+FETCH_EVENT_EMBEDDING_SQL = "SELECT embedding::text AS embedding FROM events WHERE id = ?"
+
+# embedding 서브토픽 모드용: 부모 아래 각 서브토픽의 멤버 이벤트들과의
+# 최대 코사인 유사도가 가장 높은 서브토픽 하나를 반환한다 (greedy-max).
+FIND_NEAREST_SUBTOPIC_SQL = """
+SELECT e.topic_id AS leaf_id, MAX(1 - (e.embedding <=> ?::vector)) AS sim
+FROM events e
+JOIN topics t ON t.id = e.topic_id
+WHERE t.parent_topic_id = ?
+  AND e.embedding IS NOT NULL
+GROUP BY e.topic_id
+ORDER BY sim DESC
+LIMIT 1
+"""
+
+FETCH_TOPIC_BY_ID_SQL = "SELECT id, category, title, summary FROM topics WHERE id = ?"
 
 
 def _get_client(model: str = LLM_MODEL) -> LLMClient:
@@ -165,6 +186,54 @@ def _resolve_action(
         # 모든 create 경로에서 fallback_title로 보정한다.
         decision["new_title"] = str(decision.get("new_title") or fallback_title).strip()
     return action, decision
+
+
+def _assign_subtopic_by_embedding(conn, ev, parent_id):
+    """이벤트 임베딩 코사인 최근접(greedy-max)으로 서브토픽 assign-or-create를 결정한다.
+
+    LLM 호출 없이 pgvector 검색만 사용하므로 결정론적이다. 부모가 이번에 새로
+    생성되어 parent_id가 None이면 서브토픽 후보가 없으므로 즉시 create.
+    반환: (action, decision, chosen) — assign이면 chosen은 TopicCandidate.
+    """
+    def _create(reason):
+        decision = {
+            "action": "create",
+            "new_title": ev.title,
+            "score": 0.0,
+            "reason": reason,
+        }
+        return "create", decision, None
+
+    if parent_id is None:
+        return _create("새 부모 토픽 — 서브토픽 후보 없음")
+    row = conn.query_one(FETCH_EVENT_EMBEDDING_SQL, (ev.id,))
+    embedding = row["embedding"] if row else None
+    if not embedding:
+        return _create("이벤트 임베딩 없음 — 새 서브토픽 생성")
+    nearest = conn.query_one(FIND_NEAREST_SUBTOPIC_SQL, (embedding, parent_id))
+    if nearest is None:
+        return _create("부모 스코프 내 서브토픽 없음")
+    sim = float(nearest["sim"])
+    if sim < SUBTOPIC_SIM_THRESHOLD:
+        return _create(
+            f"최근접 서브토픽 유사도 {sim:.3f} < {SUBTOPIC_SIM_THRESHOLD} — 새 갈래로 생성"
+        )
+    leaf = conn.query_one(FETCH_TOPIC_BY_ID_SQL, (nearest["leaf_id"],))
+    chosen = TopicCandidate(
+        topic_id=leaf["id"],
+        category=leaf["category"],
+        title=leaf["title"],
+        summary=leaf["summary"],
+        distance=1.0 - sim,
+        cause_texts=[],
+    )
+    decision = {
+        "action": "assign",
+        "topic_id": leaf["id"],
+        "score": sim,
+        "reason": f"이벤트 임베딩 코사인 유사도 {sim:.3f}",
+    }
+    return "assign", decision, chosen
 
 
 def _select_candidate(decision, candidates):
@@ -335,41 +404,52 @@ def _assign_hierarchical(
     )
 
     # 2) 서브토픽 후보 검색 — 부모가 기존 토픽일 때만 부모 스코프로 좁혀 검색한다.
+    #    (embedding 모드는 cause 후보 검색 대신 이벤트 임베딩 최근접을 쓰므로 생략)
     parent_chosen = None
     sub_candidates: list = []
     if parent_action == "assign":
         parent_chosen = _select_candidate(parent_decision, parent_candidates)
         parent_title_ctx = parent_chosen.title
         parent_summary_ctx = parent_chosen.summary
-        sub_candidates = topic_causes.search_candidates(
-            conn,
-            cause_query_embedding,
-            ev.category,
-            DISTANCE_THRESHOLD,
-            subtopic_top_k,
-            parent_topic_id=parent_chosen.topic_id,
-        )
+        if SUBTOPIC_MODE != "embedding":
+            sub_candidates = topic_causes.search_candidates(
+                conn,
+                cause_query_embedding,
+                ev.category,
+                DISTANCE_THRESHOLD,
+                subtopic_top_k,
+                parent_topic_id=parent_chosen.topic_id,
+            )
     else:
         # 새 부모: 서브토픽 후보가 없으므로 LLM 호출을 생략하고 즉시 서브토픽 create.
         parent_title_ctx = str(parent_decision["new_title"]).strip()
         parent_summary_ctx = normalize_summary(ev.summary)
 
-    sub_action, sub_decision = _resolve_action(
-        client,
-        sub_candidates,
-        lambda: build_subtopic_assignment_prompt(
-            parent_title_ctx,
-            parent_summary_ctx,
-            ev.title,
-            ev.summary,
-            cause,
-            result,
+    sub_chosen = None
+    if SUBTOPIC_MODE == "embedding":
+        # 서브토픽은 이벤트 임베딩 최근접(greedy-max)으로 결정 — LLM 배정 판단 없음.
+        sub_action, sub_decision, sub_chosen = _assign_subtopic_by_embedding(
+            conn, ev, parent_chosen.topic_id if parent_chosen else None
+        )
+    else:
+        sub_action, sub_decision = _resolve_action(
+            client,
             sub_candidates,
-        ),
-        fallback_title=ev.title,
-        # 서브토픽은 과병합 방지를 위해 부모보다 높은 문턱을 쓸 수 있다.
-        score_threshold=SUBTOPIC_ASSIGN_SCORE_THRESHOLD,
-    )
+            lambda: build_subtopic_assignment_prompt(
+                parent_title_ctx,
+                parent_summary_ctx,
+                ev.title,
+                ev.summary,
+                cause,
+                result,
+                sub_candidates,
+            ),
+            fallback_title=ev.title,
+            # 서브토픽은 과병합 방지를 위해 부모보다 높은 문턱을 쓸 수 있다.
+            score_threshold=SUBTOPIC_ASSIGN_SCORE_THRESHOLD,
+        )
+        if sub_action == "assign":
+            sub_chosen = _select_candidate(sub_decision, sub_candidates)
 
     # 임베딩: result는 항상 저장, cause는 부모·서브 중 하나라도 새로 생성할 때만 필요.
     result_embedding = to_vector_literal(embed_passage(result))
@@ -391,10 +471,8 @@ def _assign_hierarchical(
             fallback_summary=f"{parent_chosen.summary} {ev.summary}",
         )
 
-    sub_chosen = None
     sub_update = None
     if sub_action == "assign":
-        sub_chosen = _select_candidate(sub_decision, sub_candidates)
         sub_update = _generate_topic_update(
             client,
             topic_title=sub_chosen.title,
