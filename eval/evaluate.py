@@ -93,6 +93,17 @@ CSV_COLUMNS = [
     "over_split_topic",
     "over_merge_topic",
     "duplicate_pred_topic",
+    # covered-only (배정된 아이템만, 유령 싱글턴 제외) — 서브토픽/토픽
+    "covered_bcubed_f1_subtopic",
+    "covered_bcubed_precision_subtopic",
+    "covered_singleton_rate_subtopic",
+    "covered_num_pred_subtopic",
+    "covered_over_merge_subtopic",
+    "covered_bcubed_f1_topic",
+    "covered_bcubed_precision_topic",
+    "covered_singleton_rate_topic",
+    "covered_num_pred_topic",
+    "covered_over_merge_topic",
     # 계층 정합성
     "hierarchy_consistency",
 ]
@@ -430,6 +441,22 @@ def write_markdown_report(
         ]
         for k, v in diag.items():
             lines.append(f"- **{k}**: {v}")
+        co = m.get("covered_only")
+        if co:
+            co_diag = co.get("diagnostics", {})
+            lines += [
+                "",
+                "### covered-only (배정된 아이템만, 유령 싱글턴 제외)",
+                "",
+                f"- **B-cubed Precision**: {_fmt(co.get('bcubed_precision'))}",
+                f"- **B-cubed Recall**: {_fmt(co.get('bcubed_recall'))}",
+                f"- **B-cubed F1**: {_fmt(co.get('bcubed_f1'))}",
+                f"- **ARI**: {_fmt(co.get('ari'))}",
+                f"- **num_pred_clusters**: {co_diag.get('num_pred_clusters')}",
+                f"- **singleton_rate**: {co_diag.get('singleton_rate')}",
+                f"- **over_split_count**: {co_diag.get('over_split_count')}",
+                f"- **over_merge_count**: {co_diag.get('over_merge_count')}",
+            ]
         lines += ["", "---", ""]
         return lines
 
@@ -510,6 +537,10 @@ def append_csv_row(
     event_diag = event_m.get("diagnostics", {})
     subtopic_diag = subtopic_m.get("diagnostics", {})
     topic_diag = topic_m.get("diagnostics", {})
+    sub_co = subtopic_m.get("covered_only", {})
+    sub_co_diag = sub_co.get("diagnostics", {})
+    topic_co = topic_m.get("covered_only", {})
+    topic_co_diag = topic_co.get("diagnostics", {})
 
     with open(METRICS_CSV, "a", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=CSV_COLUMNS)
@@ -556,6 +587,17 @@ def append_csv_row(
                 "over_split_topic": topic_diag.get("over_split_count", ""),
                 "over_merge_topic": topic_diag.get("over_merge_count", ""),
                 "duplicate_pred_topic": topic_diag.get("duplicate_pred_clusters", ""),
+                # covered-only (유령 싱글턴 제외)
+                "covered_bcubed_f1_subtopic": sub_co.get("bcubed_f1", ""),
+                "covered_bcubed_precision_subtopic": sub_co.get("bcubed_precision", ""),
+                "covered_singleton_rate_subtopic": sub_co_diag.get("singleton_rate", ""),
+                "covered_num_pred_subtopic": sub_co_diag.get("num_pred_clusters", ""),
+                "covered_over_merge_subtopic": sub_co_diag.get("over_merge_count", ""),
+                "covered_bcubed_f1_topic": topic_co.get("bcubed_f1", ""),
+                "covered_bcubed_precision_topic": topic_co.get("bcubed_precision", ""),
+                "covered_singleton_rate_topic": topic_co_diag.get("singleton_rate", ""),
+                "covered_num_pred_topic": topic_co_diag.get("num_pred_clusters", ""),
+                "covered_over_merge_topic": topic_co_diag.get("over_merge_count", ""),
                 # 계층 정합성
                 "hierarchy_consistency": hierarchy_consistency,
             }

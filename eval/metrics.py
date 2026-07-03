@@ -360,6 +360,13 @@ def evaluate_level(pred: dict, gold: dict) -> dict:
             "bcubed_f1": 0.0,
             "coverage": 0.0,
             "diagnostics": cluster_diagnostics({}, {}),
+            "covered_only": {
+                "ari": 0.0,
+                "bcubed_precision": 0.0,
+                "bcubed_recall": 0.0,
+                "bcubed_f1": 0.0,
+                "diagnostics": cluster_diagnostics({}, {}),
+            },
             "note": "gold가 비어 있음",
         }
 
@@ -378,6 +385,29 @@ def evaluate_level(pred: dict, gold: dict) -> dict:
     bp, br, bf = bcubed(augmented_pred, gold)
     diag = cluster_diagnostics(augmented_pred, gold)
 
+    # covered-only 지표: 실제 배정된 아이템만으로 계산한 군집 품질.
+    # 유령 싱글턴(__missing_N__) 주입이 singleton_rate·num_pred·F1을 왜곡하므로,
+    # coverage 효과(미배정 패널티)와 군집 품질 효과를 분리해서 볼 수 있게 한다.
+    covered_pred = {item: pred[item] for item in covered}
+    covered_gold = {item: gold[item] for item in covered}
+    if covered:
+        cbp, cbr, cbf = bcubed(covered_pred, covered_gold)
+        covered_only = {
+            "ari": adjusted_rand_index(covered_pred, covered_gold),
+            "bcubed_precision": cbp,
+            "bcubed_recall": cbr,
+            "bcubed_f1": cbf,
+            "diagnostics": cluster_diagnostics(covered_pred, covered_gold),
+        }
+    else:
+        covered_only = {
+            "ari": 0.0,
+            "bcubed_precision": 0.0,
+            "bcubed_recall": 0.0,
+            "bcubed_f1": 0.0,
+            "diagnostics": cluster_diagnostics({}, {}),
+        }
+
     return {
         "ari": adjusted_rand_index(augmented_pred, gold),
         "nmi": normalized_mutual_information(augmented_pred, gold),
@@ -389,6 +419,7 @@ def evaluate_level(pred: dict, gold: dict) -> dict:
         "bcubed_f1": bf,
         "coverage": coverage,
         "diagnostics": diag,
+        "covered_only": covered_only,
     }
 
 
@@ -410,6 +441,20 @@ def _selftest() -> None:
     assert res["diagnostics"]["over_merge_count"] == 0, "Oracle over_merge"
     # 완전 일치 시 NMI = 1.0 (MI = H(pred) = H(gold) → NMI = 2H/2H = 1)
     assert abs(res["nmi"] - 1.0) < 1e-9, f"Oracle NMI: {res['nmi']}"
+
+    # ── 1-1) covered-only: 미배정 아이템의 유령 싱글턴 왜곡을 분리 ─────────
+    # c가 미배정인데 gold X={a,b,c} 다항목 클러스터의 일원 → augmented는 recall
+    # 패널티를 받고, covered-only(배정분 {a,b,d}는 완벽 군집)는 1.0이어야 함.
+    # (미배정 아이템이 gold 싱글턴이면 유령 싱글턴이 완벽 매치가 되어 패널티가 없다.)
+    gold_cov = {"a": "X", "b": "X", "c": "X", "d": "Y"}
+    pred_cov = {"a": 1, "b": 1, "d": 2}
+    res_cov = evaluate_level(pred_cov, gold_cov)
+    assert abs(res_cov["coverage"] - 3 / 4) < 1e-9, f"covered coverage: {res_cov['coverage']}"
+    co = res_cov["covered_only"]
+    assert abs(co["bcubed_f1"] - 1.0) < 1e-9, f"covered-only F1: {co['bcubed_f1']}"
+    assert res_cov["bcubed_f1"] < 1.0, "augmented F1은 미배정 패널티를 반영해야 함"
+    assert co["diagnostics"]["num_pred_clusters"] == 2, "covered-only는 유령 싱글턴 제외"
+    assert res_cov["diagnostics"]["num_pred_clusters"] == 3, "augmented는 유령 싱글턴 포함"
 
     # ── 2) 의도적 역 군집화: 정답 분포와 반대 → 낮은 점수 ───────────────
     # pred가 정답 클러스터를 섞어놓음: X,Y,Z → 두 그룹 P,Q로 재배치

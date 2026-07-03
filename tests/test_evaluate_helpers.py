@@ -245,5 +245,54 @@ class TestComputeHierarchyConsistency(unittest.TestCase):
         )
 
 
+class TestCoveredOnlyMetrics(unittest.TestCase):
+    """metrics.evaluate_level의 covered_only 지표.
+
+    미배정 아이템이 유령 싱글턴(__missing_N__)으로 주입되어 singleton_rate·F1을
+    왜곡하는 것을 분리 계산하는지 검증한다 (2026-07-03 critic C-1 회귀 방지).
+    """
+
+    def _evaluate(self, pred, gold):
+        from metrics import evaluate_level
+        return evaluate_level(pred, gold)
+
+    def test_full_coverage_covered_equals_augmented(self):
+        """전 아이템이 배정되면 covered-only와 기본 F1이 같아야 한다."""
+        gold = {"a": "X", "b": "X", "c": "Y"}
+        pred = {"a": 1, "b": 1, "c": 2}
+        res = self._evaluate(pred, gold)
+        self.assertAlmostEqual(res["covered_only"]["bcubed_f1"], res["bcubed_f1"])
+
+    def test_missing_items_do_not_pollute_covered_metrics(self):
+        """미배정 아이템은 covered-only 지표에서 제외되어야 한다.
+
+        미배정 c가 다항목 gold 클러스터 X={a,b,c}의 일원이어야 augmented에
+        recall 패널티가 생긴다(gold 싱글턴이면 유령 싱글턴이 완벽 매치됨).
+        """
+        gold = {"a": "X", "b": "X", "c": "X", "d": "Y"}
+        pred = {"a": 1, "b": 1}  # c, d 미배정
+        res = self._evaluate(pred, gold)
+        # 배정분(a,b)은 완벽 군집 → covered-only F1 = 1.0
+        self.assertAlmostEqual(res["covered_only"]["bcubed_f1"], 1.0)
+        # augmented F1은 미배정 패널티로 1.0 미만
+        self.assertLess(res["bcubed_f1"], 1.0)
+
+    def test_covered_diagnostics_exclude_phantom_singletons(self):
+        """covered-only 진단의 num_pred/singleton_rate에 유령 싱글턴이 없어야 한다."""
+        gold = {"a": "X", "b": "X", "c": "Y", "d": "Z"}
+        pred = {"a": 1, "b": 1}
+        res = self._evaluate(pred, gold)
+        self.assertEqual(res["covered_only"]["diagnostics"]["num_pred_clusters"], 1)
+        self.assertEqual(res["covered_only"]["diagnostics"]["singleton_rate"], 0.0)
+        # augmented 쪽은 유령 싱글턴 2개가 포함된다
+        self.assertEqual(res["diagnostics"]["num_pred_clusters"], 3)
+
+    def test_empty_pred_returns_zero_covered_metrics(self):
+        """배정이 하나도 없으면 covered-only는 0으로 안전하게 반환한다."""
+        gold = {"a": "X"}
+        res = self._evaluate({}, gold)
+        self.assertEqual(res["covered_only"]["bcubed_f1"], 0.0)
+
+
 if __name__ == "__main__":
     unittest.main()
