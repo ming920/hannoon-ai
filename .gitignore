@@ -6,6 +6,9 @@ __pycache__/
 .pytest_cache/
 .env
 logs/
+
+# eval 실행 산출물 (evaluate.py가 재생성 — 핵심 수치는 eval/README.md 요약 참조)
+eval/results/
 data/*.db
 data/*.db-shm
 data/*.db-wal
@@ -20,4 +23,5 @@ data/diagnostics/
 .claude/settings.local.json
 .claude/*.local.json
 .claude/agent-memory/
+.claude/worktrees/
 .DS_Store

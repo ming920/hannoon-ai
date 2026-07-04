@@ -38,9 +38,14 @@ from topic_classifier.pipeline import (
     _resolve_action,
     _select_candidate,
     _assign_hierarchical,
+    _assign_subtopic_by_embedding,
     run,
 )
-from topic_classifier.prompts import build_subtopic_assignment_prompt
+import topic_classifier.settings as topic_settings
+from topic_classifier.prompts import (
+    build_parent_topic_assignment_prompt,
+    build_subtopic_assignment_prompt,
+)
 
 
 # ── 헬퍼: DB 가짜 객체 ────────────────────────────────────────────────────────
@@ -88,6 +93,19 @@ class FakePipelineConn:
     @contextmanager
     def transaction(self):
         yield self
+
+
+class FakeQueryOneConn(FakePipelineConn):
+    """query_one 응답을 순서대로 스크립트할 수 있는 가짜 연결 (embedding 모드 테스트용)."""
+
+    def __init__(self, responses):
+        super().__init__()
+        self._responses = list(responses)
+        self.query_one_calls: list[tuple] = []
+
+    def query_one(self, sql, params=None):
+        self.query_one_calls.append((sql, params))
+        return self._responses.pop(0) if self._responses else None
 
 
 def _make_candidate(topic_id: int, title: str = "토픽제목", summary: str = "토픽요약",
@@ -351,6 +369,51 @@ class ResolveActionTests(unittest.TestCase):
         )
         self.assertEqual(decision["reason"], "검색 후보 없음")
 
+    def test_create_missing_new_title_backfilled_with_fallback(self):
+        """LLM 이 create 에서 new_title 을 누락해도 KeyError 없이 fallback_title 로 보정되어야 한다."""
+        candidates = [_make_candidate(5)]
+        client = self._mock_client({"action": "create", "score": 0.2, "reason": "별도 사안"})
+        action, decision = _resolve_action(
+            client, candidates, lambda: "prompt", fallback_title="폴백제목"
+        )
+        self.assertEqual(action, "create")
+        self.assertEqual(decision["new_title"], "폴백제목")
+
+    def test_create_null_new_title_backfilled_with_fallback(self):
+        """LLM 이 new_title 을 null 로 반환하면 'None' 제목 대신 fallback_title 을 써야 한다."""
+        candidates = [_make_candidate(6)]
+        client = self._mock_client({
+            "action": "create", "new_title": None, "score": 0.2, "reason": "별도 사안",
+        })
+        _, decision = _resolve_action(
+            client, candidates, lambda: "prompt", fallback_title="폴백제목"
+        )
+        self.assertEqual(decision["new_title"], "폴백제목")
+
+    def test_custom_score_threshold_demotes_midband_assign(self):
+        """score_threshold 를 0.85로 올리면 0.80 assign 이 create 로 강등되어야 한다."""
+        candidates = [_make_candidate(7)]
+        client = self._mock_client({
+            "action": "assign", "topic_id": 7, "score": 0.80, "reason": "같은 갈래",
+        })
+        action, _ = _resolve_action(
+            client, candidates, lambda: "prompt", fallback_title="폴백",
+            score_threshold=0.85,
+        )
+        self.assertEqual(action, "create")
+
+    def test_custom_score_threshold_keeps_confident_assign(self):
+        """문턱 0.85에서도 0.90 assign 은 그대로 통과해야 한다."""
+        candidates = [_make_candidate(8)]
+        client = self._mock_client({
+            "action": "assign", "topic_id": 8, "score": 0.90, "reason": "같은 갈래",
+        })
+        action, _ = _resolve_action(
+            client, candidates, lambda: "prompt", fallback_title="폴백",
+            score_threshold=0.85,
+        )
+        self.assertEqual(action, "assign")
+
 
 # ── 6. pipeline._select_candidate — 후보 집합 검증 ────────────────────────────
 
@@ -420,6 +483,31 @@ class AssignHierarchicalTests(unittest.TestCase):
         self.assertIn("create", label)
         self.assertIn("200", label)
 
+    def test_new_parent_fallback_title_uses_cause(self):
+        """후보 0개로 부모를 새로 만들 때 제목은 이벤트 제목이 아니라 cause 명사구여야 한다."""
+        ev = _make_event()
+        client = MagicMock()
+        conn = FakePipelineConn()
+
+        patches = self._common_patches()
+        with patch(f"{_PATCH_BASE}.topic_causes.search_candidates", return_value=[]), \
+             patch(f"{_PATCH_BASE}.topics.create_topic", side_effect=[100, 200]) as mock_create, \
+             patch(f"{_PATCH_BASE}.topics.update_topic"):
+            for p in patches:
+                p.start()
+            try:
+                _assign_hierarchical(conn, client, ev, "전세 보증금 미반환", "결과텍스트", 5, 5)
+            finally:
+                for p in patches:
+                    p.stop()
+
+        # positional 호출: (conn, category, title, summary, parent_id)
+        parent_args = mock_create.call_args_list[0][0]
+        sub_args = mock_create.call_args_list[1][0]
+        self.assertEqual(parent_args[2], "전세 보증금 미반환")
+        # 서브토픽 폴백 제목은 기존대로 이벤트 제목을 유지한다
+        self.assertEqual(sub_args[2], ev.title)
+
     def test_existing_parent_new_sub_assigns_parent_creates_sub(self):
         """기존 부모에 배정되고 서브토픽 후보가 없으면 서브는 신규 생성되어야 한다."""
         ev = _make_event()
@@ -439,7 +527,8 @@ class AssignHierarchicalTests(unittest.TestCase):
             return []  # 서브토픽 후보 없음
 
         patches = self._common_patches()
-        with patch(f"{_PATCH_BASE}.topic_causes.search_candidates", side_effect=_search), \
+        with patch(f"{_PATCH_BASE}.SUBTOPIC_MODE", "llm"), \
+             patch(f"{_PATCH_BASE}.topic_causes.search_candidates", side_effect=_search), \
              patch(f"{_PATCH_BASE}.topics.create_topic", return_value=201) as mock_create, \
              patch(f"{_PATCH_BASE}.topics.update_topic") as mock_update:
             for p in patches:
@@ -459,6 +548,50 @@ class AssignHierarchicalTests(unittest.TestCase):
         create_args = mock_create.call_args[0]
         self.assertEqual(create_args[4], 10)
         self.assertIn("create", label)
+
+    def test_sub_assign_uses_subtopic_threshold(self):
+        """서브 경로는 SUBTOPIC_ASSIGN_SCORE_THRESHOLD 로 강등을 판단해야 한다.
+
+        부모 assign 0.90(기본 문턱 통과), 서브 assign 0.80은 서브 문턱 0.85 미달로
+        create 강등 — 부모/서브 임계값 분리(critic C-3/C-11) 회귀 테스트.
+        """
+        ev = _make_event()
+        parent_cand = _make_candidate(10, title="부모제목", summary="부모요약")
+        sub_cand = _make_candidate(20, title="서브제목", summary="서브요약")
+        conn = FakePipelineConn()
+
+        # call 순서: 1) 부모 배정, 2) 서브 배정(강등), 3) 부모 롤업 (서브 롤업 없음)
+        client = MagicMock()
+        client.request_json.side_effect = [
+            {"action": "assign", "topic_id": 10, "score": 0.90, "reason": "동일 흐름"},
+            {"action": "assign", "topic_id": 20, "score": 0.80, "reason": "같은 갈래"},
+            {"title": "부모갱신", "summary": "부모요약갱신"},
+        ]
+
+        def _search(conn_, emb, cat, dist, k, *, roots_only=False, parent_topic_id=None):
+            if roots_only:
+                return [parent_cand]
+            if parent_topic_id == 10:
+                return [sub_cand]
+            return []
+
+        patches = self._common_patches()
+        with patch(f"{_PATCH_BASE}.SUBTOPIC_MODE", "llm"), \
+             patch(f"{_PATCH_BASE}.SUBTOPIC_ASSIGN_SCORE_THRESHOLD", 0.85), \
+             patch(f"{_PATCH_BASE}.topic_causes.search_candidates", side_effect=_search), \
+             patch(f"{_PATCH_BASE}.topics.create_topic", return_value=300) as mock_create, \
+             patch(f"{_PATCH_BASE}.topics.update_topic") as mock_update:
+            for p in patches:
+                p.start()
+            try:
+                label = _assign_hierarchical(conn, client, ev, "원인", "결과", 5, 5)
+            finally:
+                for p in patches:
+                    p.stop()
+
+        mock_update.assert_called_once()  # 부모만 update
+        mock_create.assert_called_once()  # 서브는 강등되어 create
+        self.assertIn("sub create", label)
 
     def test_existing_parent_existing_sub_assigns_both(self):
         """부모·서브 모두 기존 토픽에 배정될 때 두 롤업 LLM 이 호출되어야 한다."""
@@ -484,7 +617,8 @@ class AssignHierarchicalTests(unittest.TestCase):
             return []
 
         patches = self._common_patches()
-        with patch(f"{_PATCH_BASE}.topic_causes.search_candidates", side_effect=_search), \
+        with patch(f"{_PATCH_BASE}.SUBTOPIC_MODE", "llm"), \
+             patch(f"{_PATCH_BASE}.topic_causes.search_candidates", side_effect=_search), \
              patch(f"{_PATCH_BASE}.topics.create_topic") as mock_create, \
              patch(f"{_PATCH_BASE}.topics.update_topic") as mock_update:
             for p in patches:
@@ -576,7 +710,7 @@ class RunPipelineTests(unittest.TestCase):
         self.assertEqual(call_args[6], 7)
 
     def test_run_returns_zero_on_exception(self):
-        """이벤트 처리 중 예외가 나면 break 하고 처리된 건수를 반환해야 한다."""
+        """이벤트 처리 중 예외가 나면 해당 이벤트를 건너뛰고 처리된 건수를 반환해야 한다."""
         ev = _make_event()
         client = self._mock_client({"cause": "원인", "result": "결과"})
         conn = FakePipelineConn()
@@ -587,6 +721,22 @@ class RunPipelineTests(unittest.TestCase):
             result = run(conn, min_net=1, batch_size=10, top_k=5, llm_model="m")
 
         self.assertEqual(result, 0)
+
+    def test_run_continues_after_event_failure(self):
+        """앞 이벤트가 실패해도 break 하지 않고 다음 이벤트를 계속 처리해야 한다(웨징 회귀)."""
+        ev1 = _make_event(event_id=1)
+        ev2 = _make_event(event_id=2)
+        client = self._mock_client({"cause": "원인", "result": "결과"})
+        conn = FakePipelineConn()
+
+        with patch(f"{_PATCH_BASE}.events.fetch_unassigned", return_value=[ev1, ev2]), \
+             patch(f"{_PATCH_BASE}._get_client", return_value=client), \
+             patch(f"{_PATCH_BASE}._assign_flat",
+                   side_effect=[RuntimeError("DB 오류"), "create"]) as mock_flat:
+            result = run(conn, min_net=1, batch_size=10, top_k=5, llm_model="m")
+
+        self.assertEqual(result, 1)
+        self.assertEqual(mock_flat.call_count, 2)
 
 
 # ── 9. topic_classifier.prompts.build_subtopic_assignment_prompt ──────────────
@@ -641,6 +791,17 @@ class SubtopicPromptTests(unittest.TestCase):
         self.assertIn('"action": "assign"', prompt)
         self.assertIn('"action": "create"', prompt)
 
+    def test_prompt_defines_subtopic_as_multi_event_branch(self):
+        """서브토픽을 개별 사건이 아닌 여러 관련 사건을 담는 중간 갈래로 정의해야 한다(싱글턴 회귀 방지)."""
+        prompt = self._build()
+        self.assertIn("여러 관련 사건", prompt)
+        self.assertIn("구체적 사건·절차 단계가 서로 달라도 assign", prompt)
+
+    def test_prompt_bans_guardrail_markers_in_assign_reason(self):
+        """assign 사유에 가드레일 부정 마커 표현을 금지하는 지시가 있어야 한다."""
+        prompt = self._build()
+        self.assertIn("같은 표현을 쓰지 마세요", prompt)
+
 
 # ── 10. settings — SUBTOPICS_ENABLED 환경변수 파싱 ────────────────────────────
 
@@ -678,6 +839,276 @@ class SubtopicsSettingsTests(unittest.TestCase):
         import topic_classifier.settings as s
         os.environ.pop("TOPIC_SUBTOPICS_ENABLED", None)
         importlib.reload(s)
+
+
+# ── 10-1. topic_classifier.prompts.build_parent_topic_assignment_prompt ──────
+
+class ParentPromptTests(unittest.TestCase):
+    """광의 부모 토픽 프롬프트의 핵심 요소를 검증 (리뷰 R-테스트갭 반영)."""
+
+    def _build(self, candidates=None):
+        return build_parent_topic_assignment_prompt(
+            title="한미 반도체 공급망 MOU 체결",
+            summary="한국과 미국이 반도체 공급망 협력 MOU를 체결했다.",
+            cause="반도체 공급망 협력 필요성",
+            result="한미 반도체 공급망 MOU가 체결됐다.",
+            candidates=candidates or [],
+        )
+
+    def test_contains_event_and_broad_theme_rules(self):
+        """이벤트 정보와 '넓은 주제' 판단 기준이 프롬프트에 있어야 한다."""
+        prompt = self._build()
+        self.assertIn("한미 반도체 공급망 MOU 체결", prompt)
+        self.assertIn("넓은 주제", prompt)
+        self.assertIn("구체적 사건이 서로 달라도 assign", prompt)
+
+    def test_contains_action_formats_and_candidate_fallback(self):
+        """assign/create 형식 지시와 후보 없음 문구가 있어야 한다."""
+        prompt = self._build()
+        self.assertIn('"action": "assign"', prompt)
+        self.assertIn('"action": "create"', prompt)
+        self.assertIn("검색된 후보 없음", prompt)
+
+    def test_bans_guardrail_markers_in_assign_reason(self):
+        """가드레일 부정 마커 표현 금지 지시가 있어야 한다 (강등 오탐 방지)."""
+        prompt = self._build()
+        self.assertIn("같은 표현을 쓰지 마세요", prompt)
+
+
+# ── 11. pipeline._assign_subtopic_by_embedding — 임베딩 최근접 서브 배정 ──────
+
+class AssignSubtopicByEmbeddingTests(unittest.TestCase):
+    """embedding 서브토픽 모드의 assign-or-create 결정을 검증 (LLM 무관, 결정론적)."""
+
+    def test_new_parent_creates_without_queries(self):
+        """parent_id가 None(새 부모)이면 DB 조회 없이 즉시 create 해야 한다."""
+        conn = FakeQueryOneConn([])
+        ev = _make_event()
+        action, decision, chosen = _assign_subtopic_by_embedding(conn, ev, None)
+        self.assertEqual(action, "create")
+        self.assertEqual(decision["new_title"], ev.title)
+        self.assertIsNone(chosen)
+        self.assertEqual(conn.query_one_calls, [])
+
+    def test_missing_embedding_creates(self):
+        """이벤트 임베딩이 없으면 create 해야 한다."""
+        conn = FakeQueryOneConn([{"embedding": None}])
+        action, _, chosen = _assign_subtopic_by_embedding(conn, _make_event(), 10)
+        self.assertEqual(action, "create")
+        self.assertIsNone(chosen)
+
+    def test_similarity_below_threshold_creates(self):
+        """최근접 유사도가 문턱 미만이면 create 해야 한다."""
+        conn = FakeQueryOneConn([
+            {"embedding": "[0.1,0.2]"},
+            {"leaf_id": 20, "sim": 0.30},
+        ])
+        with patch(f"{_PATCH_BASE}.SUBTOPIC_SIM_THRESHOLD", 0.55):
+            action, decision, chosen = _assign_subtopic_by_embedding(conn, _make_event(), 10)
+        self.assertEqual(action, "create")
+        self.assertIn("0.300", decision["reason"])
+        self.assertIsNone(chosen)
+
+    def test_similarity_above_threshold_assigns_nearest(self):
+        """문턱 이상이면 최근접 서브토픽에 assign하고 TopicCandidate를 반환해야 한다."""
+        conn = FakeQueryOneConn([
+            {"embedding": "[0.1,0.2]"},
+            {"leaf_id": 20, "sim": 0.83},
+            {"id": 20, "category": "사회", "title": "서브제목", "summary": "서브요약"},
+        ])
+        with patch(f"{_PATCH_BASE}.SUBTOPIC_SIM_THRESHOLD", 0.55):
+            action, decision, chosen = _assign_subtopic_by_embedding(conn, _make_event(), 10)
+        self.assertEqual(action, "assign")
+        self.assertEqual(decision["topic_id"], 20)
+        self.assertAlmostEqual(decision["score"], 0.83)
+        self.assertEqual(chosen.topic_id, 20)
+        self.assertEqual(chosen.title, "서브제목")
+
+    def test_no_subtopics_under_parent_creates(self):
+        """부모 아래 서브토픽이 하나도 없으면 create 해야 한다."""
+        conn = FakeQueryOneConn([{"embedding": "[0.1,0.2]"}, None])
+        action, _, chosen = _assign_subtopic_by_embedding(conn, _make_event(), 10)
+        self.assertEqual(action, "create")
+        self.assertIsNone(chosen)
+
+    def test_similarity_exactly_at_threshold_assigns(self):
+        """sim == 임계값(경계)이면 assign이어야 한다 (>= 비교, 리뷰 R-테스트갭 반영)."""
+        conn = FakeQueryOneConn([
+            {"embedding": "[0.1,0.2]"},
+            {"leaf_id": 20, "sim": 0.55},
+            {"id": 20, "category": "사회", "title": "서브제목", "summary": "서브요약"},
+        ])
+        with patch(f"{_PATCH_BASE}.SUBTOPIC_SIM_THRESHOLD", 0.55):
+            action, _, chosen = _assign_subtopic_by_embedding(conn, _make_event(), 10)
+        self.assertEqual(action, "assign")
+        self.assertEqual(chosen.topic_id, 20)
+
+    def test_nan_similarity_falls_back_to_create(self):
+        """sim이 NaN(영벡터 등)이면 assign으로 새지 않고 create 해야 한다."""
+        conn = FakeQueryOneConn([
+            {"embedding": "[0.0,0.0]"},
+            {"leaf_id": 20, "sim": float("nan")},
+        ])
+        with patch(f"{_PATCH_BASE}.SUBTOPIC_SIM_THRESHOLD", 0.55):
+            action, _, chosen = _assign_subtopic_by_embedding(conn, _make_event(), 10)
+        self.assertEqual(action, "create")
+        self.assertIsNone(chosen)
+
+
+# ── 12. embedding 모드 통합 — _assign_hierarchical 분기 ──────────────────────
+
+class EmbeddingModeHierarchicalTests(unittest.TestCase):
+    """SUBTOPIC_MODE=embedding에서 서브 배정이 LLM·후보검색 없이 동작하는지 검증."""
+
+    def _common_patches(self):
+        return [
+            patch(f"{_PATCH_BASE}.embed_query", return_value=[0.1]),
+            patch(f"{_PATCH_BASE}.embed_passage", return_value=[0.1]),
+            patch(f"{_PATCH_BASE}.to_vector_literal", return_value="[0.1]"),
+            patch(f"{_PATCH_BASE}.topic_causes.add_cause"),
+            patch(f"{_PATCH_BASE}.events.assign_topic"),
+            patch(f"{_PATCH_BASE}.events.find_prev_event", return_value=None),
+            patch(f"{_PATCH_BASE}.events.find_next_event_id", return_value=None),
+            patch(f"{_PATCH_BASE}.events.link_into_chain"),
+        ]
+
+    def test_embedding_mode_assigns_without_sub_llm_or_candidate_search(self):
+        """부모 assign 후 서브는 임베딩 쿼리로 assign — 서브 LLM 배정·후보검색이 없어야 한다."""
+        ev = _make_event()
+        parent_cand = _make_candidate(10, title="부모제목", summary="부모요약")
+        conn = FakeQueryOneConn([
+            {"embedding": "[0.1,0.2]"},
+            {"leaf_id": 20, "sim": 0.90},
+            {"id": 20, "category": "사회", "title": "서브제목", "summary": "서브요약"},
+        ])
+
+        # LLM 호출: 1) 부모 배정, 2) 부모 롤업, 3) 서브 롤업 (서브 배정 판단 없음)
+        client = MagicMock()
+        client.request_json.side_effect = [
+            {"action": "assign", "topic_id": 10, "score": 0.9, "reason": "동일 흐름"},
+            {"title": "부모갱신", "summary": "부모요약갱신"},
+            {"title": "서브갱신", "summary": "서브요약갱신"},
+        ]
+
+        search_calls = []
+        def _search(conn_, emb, cat, dist, k, *, roots_only=False, parent_topic_id=None):
+            search_calls.append({"roots_only": roots_only, "parent_topic_id": parent_topic_id})
+            return [parent_cand] if roots_only else []
+
+        patches = self._common_patches()
+        with patch(f"{_PATCH_BASE}.SUBTOPIC_MODE", "embedding"), \
+             patch(f"{_PATCH_BASE}.SUBTOPIC_SIM_THRESHOLD", 0.55), \
+             patch(f"{_PATCH_BASE}.topic_causes.search_candidates", side_effect=_search), \
+             patch(f"{_PATCH_BASE}.topics.create_topic") as mock_create, \
+             patch(f"{_PATCH_BASE}.topics.update_topic") as mock_update:
+            for p in patches:
+                p.start()
+            try:
+                label = _assign_hierarchical(conn, client, ev, "원인", "결과", 5, 5)
+            finally:
+                for p in patches:
+                    p.stop()
+
+        # 후보 검색은 부모(roots_only) 1회뿐 — 서브 스코프 검색 없음
+        self.assertEqual(len(search_calls), 1)
+        self.assertTrue(search_calls[0]["roots_only"])
+        # LLM은 3회 (부모 배정 + 롤업 2) — 서브 배정 판단 호출 없음
+        self.assertEqual(client.request_json.call_count, 3)
+        mock_create.assert_not_called()
+        self.assertEqual(mock_update.call_count, 2)
+        self.assertIn("assign 20", label)
+
+    def test_embedding_mode_low_similarity_creates_subtopic(self):
+        """유사도 미달이면 서브를 create하고 부모 아래에 붙여야 한다."""
+        ev = _make_event()
+        parent_cand = _make_candidate(10, title="부모제목", summary="부모요약")
+        conn = FakeQueryOneConn([
+            {"embedding": "[0.1,0.2]"},
+            {"leaf_id": 20, "sim": 0.20},
+        ])
+
+        client = MagicMock()
+        client.request_json.side_effect = [
+            {"action": "assign", "topic_id": 10, "score": 0.9, "reason": "동일 흐름"},
+            {"title": "부모갱신", "summary": "부모요약갱신"},
+        ]
+
+        patches = self._common_patches()
+        with patch(f"{_PATCH_BASE}.SUBTOPIC_MODE", "embedding"), \
+             patch(f"{_PATCH_BASE}.SUBTOPIC_SIM_THRESHOLD", 0.55), \
+             patch(f"{_PATCH_BASE}.topic_causes.search_candidates", return_value=[parent_cand]), \
+             patch(f"{_PATCH_BASE}.topics.create_topic", return_value=300) as mock_create, \
+             patch(f"{_PATCH_BASE}.topics.update_topic") as mock_update:
+            for p in patches:
+                p.start()
+            try:
+                label = _assign_hierarchical(conn, client, ev, "원인", "결과", 5, 5)
+            finally:
+                for p in patches:
+                    p.stop()
+
+        mock_update.assert_called_once()  # 부모만 update
+        mock_create.assert_called_once()  # 서브 create
+        create_args = mock_create.call_args[0]
+        self.assertEqual(create_args[4], 10)  # parent_id 아래에 생성
+        self.assertIn("sub create", label)
+
+
+# ── 13. settings — SUBTOPIC_ASSIGN_SCORE_THRESHOLD 파싱 ──────────────────────
+
+class SubtopicThresholdSettingsTests(unittest.TestCase):
+    """서브토픽 전용 assign 임계값의 기본값·env 오버라이드를 검증."""
+
+    def _reload_settings(self):
+        import importlib
+        importlib.reload(topic_settings)
+        return topic_settings
+
+    def test_defaults_to_assign_threshold(self):
+        """env 미지정 시 ASSIGN_SCORE_THRESHOLD 와 동일해야 한다(기존 동작 유지)."""
+        os.environ.pop("TOPIC_SUBTOPIC_ASSIGN_SCORE_THRESHOLD", None)
+        s = self._reload_settings()
+        self.assertAlmostEqual(
+            s.SUBTOPIC_ASSIGN_SCORE_THRESHOLD, s.ASSIGN_SCORE_THRESHOLD
+        )
+
+    def test_env_override_applies(self):
+        """TOPIC_SUBTOPIC_ASSIGN_SCORE_THRESHOLD=0.85 지정 시 그 값을 써야 한다."""
+        with patch.dict(os.environ, {"TOPIC_SUBTOPIC_ASSIGN_SCORE_THRESHOLD": "0.85"}):
+            s = self._reload_settings()
+            self.assertAlmostEqual(s.SUBTOPIC_ASSIGN_SCORE_THRESHOLD, 0.85)
+
+    def test_subtopic_mode_defaults_to_embedding(self):
+        """SUBTOPIC_MODE 미지정 시 embedding이어야 한다 (홀드아웃 검증 후 기본 채택).
+
+        원본·홀드아웃 두 세트 모두에서 llm 대비 우위 확인 (holdout-emb065-1:
+        covered P 0.926/F1 0.812 vs llm F1 0.557). TOPIC_SUBTOPICS_ENABLED
+        기본 false라 평면 모드 프로덕션에는 영향 없음.
+        """
+        os.environ.pop("TOPIC_SUBTOPIC_MODE", None)
+        s = self._reload_settings()
+        self.assertEqual(s.SUBTOPIC_MODE, "embedding")
+
+    def test_subtopic_mode_env_override(self):
+        """TOPIC_SUBTOPIC_MODE=llm 지정 시 기존 LLM 방식으로 되돌릴 수 있어야 한다."""
+        with patch.dict(os.environ, {"TOPIC_SUBTOPIC_MODE": "LLM"}):
+            s = self._reload_settings()
+            self.assertEqual(s.SUBTOPIC_MODE, "llm")
+
+    def test_sim_threshold_default_and_override(self):
+        """SUBTOPIC_SIM_THRESHOLD 기본 0.65(두 데이터셋 강건점), env 오버라이드 가능."""
+        os.environ.pop("TOPIC_SUBTOPIC_SIM_THRESHOLD", None)
+        s = self._reload_settings()
+        self.assertAlmostEqual(s.SUBTOPIC_SIM_THRESHOLD, 0.65)
+        with patch.dict(os.environ, {"TOPIC_SUBTOPIC_SIM_THRESHOLD": "0.50"}):
+            s = self._reload_settings()
+            self.assertAlmostEqual(s.SUBTOPIC_SIM_THRESHOLD, 0.50)
+
+    def tearDown(self):
+        os.environ.pop("TOPIC_SUBTOPIC_ASSIGN_SCORE_THRESHOLD", None)
+        os.environ.pop("TOPIC_SUBTOPIC_MODE", None)
+        os.environ.pop("TOPIC_SUBTOPIC_SIM_THRESHOLD", None)
+        self._reload_settings()
 
 
 if __name__ == "__main__":

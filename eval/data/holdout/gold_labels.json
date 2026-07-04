@@ -1,0 +1,507 @@
+{
+  "dummy-E101-0": {
+    "gold_topic": "H101",
+    "gold_subtopic": "HS01",
+    "gold_event": "E101"
+  },
+  "dummy-E101-1": {
+    "gold_topic": "H101",
+    "gold_subtopic": "HS01",
+    "gold_event": "E101"
+  },
+  "dummy-E101-2": {
+    "gold_topic": "H101",
+    "gold_subtopic": "HS01",
+    "gold_event": "E101"
+  },
+  "dummy-E101-3": {
+    "gold_topic": "H101",
+    "gold_subtopic": "HS01",
+    "gold_event": "E101"
+  },
+  "dummy-E101-4": {
+    "gold_topic": "H101",
+    "gold_subtopic": "HS01",
+    "gold_event": "E101"
+  },
+  "dummy-E101-5": {
+    "gold_topic": "H101",
+    "gold_subtopic": "HS01",
+    "gold_event": "E101"
+  },
+  "dummy-E102-0": {
+    "gold_topic": "H101",
+    "gold_subtopic": "HS01",
+    "gold_event": "E102"
+  },
+  "dummy-E102-1": {
+    "gold_topic": "H101",
+    "gold_subtopic": "HS01",
+    "gold_event": "E102"
+  },
+  "dummy-E102-2": {
+    "gold_topic": "H101",
+    "gold_subtopic": "HS01",
+    "gold_event": "E102"
+  },
+  "dummy-E102-3": {
+    "gold_topic": "H101",
+    "gold_subtopic": "HS01",
+    "gold_event": "E102"
+  },
+  "dummy-E102-4": {
+    "gold_topic": "H101",
+    "gold_subtopic": "HS01",
+    "gold_event": "E102"
+  },
+  "dummy-E103-0": {
+    "gold_topic": "H101",
+    "gold_subtopic": "HS02",
+    "gold_event": "E103"
+  },
+  "dummy-E103-1": {
+    "gold_topic": "H101",
+    "gold_subtopic": "HS02",
+    "gold_event": "E103"
+  },
+  "dummy-E103-2": {
+    "gold_topic": "H101",
+    "gold_subtopic": "HS02",
+    "gold_event": "E103"
+  },
+  "dummy-E103-3": {
+    "gold_topic": "H101",
+    "gold_subtopic": "HS02",
+    "gold_event": "E103"
+  },
+  "dummy-E103-4": {
+    "gold_topic": "H101",
+    "gold_subtopic": "HS02",
+    "gold_event": "E103"
+  },
+  "dummy-E103-5": {
+    "gold_topic": "H101",
+    "gold_subtopic": "HS02",
+    "gold_event": "E103"
+  },
+  "dummy-E104-0": {
+    "gold_topic": "H101",
+    "gold_subtopic": "HS02",
+    "gold_event": "E104"
+  },
+  "dummy-E104-1": {
+    "gold_topic": "H101",
+    "gold_subtopic": "HS02",
+    "gold_event": "E104"
+  },
+  "dummy-E104-2": {
+    "gold_topic": "H101",
+    "gold_subtopic": "HS02",
+    "gold_event": "E104"
+  },
+  "dummy-E104-3": {
+    "gold_topic": "H101",
+    "gold_subtopic": "HS02",
+    "gold_event": "E104"
+  },
+  "dummy-E104-4": {
+    "gold_topic": "H101",
+    "gold_subtopic": "HS02",
+    "gold_event": "E104"
+  },
+  "dummy-E105-0": {
+    "gold_topic": "H101",
+    "gold_subtopic": "HS03",
+    "gold_event": "E105"
+  },
+  "dummy-E105-1": {
+    "gold_topic": "H101",
+    "gold_subtopic": "HS03",
+    "gold_event": "E105"
+  },
+  "dummy-E105-2": {
+    "gold_topic": "H101",
+    "gold_subtopic": "HS03",
+    "gold_event": "E105"
+  },
+  "dummy-E105-3": {
+    "gold_topic": "H101",
+    "gold_subtopic": "HS03",
+    "gold_event": "E105"
+  },
+  "dummy-E105-4": {
+    "gold_topic": "H101",
+    "gold_subtopic": "HS03",
+    "gold_event": "E105"
+  },
+  "dummy-E106-0": {
+    "gold_topic": "H102",
+    "gold_subtopic": "HS04",
+    "gold_event": "E106"
+  },
+  "dummy-E106-1": {
+    "gold_topic": "H102",
+    "gold_subtopic": "HS04",
+    "gold_event": "E106"
+  },
+  "dummy-E106-2": {
+    "gold_topic": "H102",
+    "gold_subtopic": "HS04",
+    "gold_event": "E106"
+  },
+  "dummy-E106-3": {
+    "gold_topic": "H102",
+    "gold_subtopic": "HS04",
+    "gold_event": "E106"
+  },
+  "dummy-E106-4": {
+    "gold_topic": "H102",
+    "gold_subtopic": "HS04",
+    "gold_event": "E106"
+  },
+  "dummy-E106-5": {
+    "gold_topic": "H102",
+    "gold_subtopic": "HS04",
+    "gold_event": "E106"
+  },
+  "dummy-E107-0": {
+    "gold_topic": "H102",
+    "gold_subtopic": "HS04",
+    "gold_event": "E107"
+  },
+  "dummy-E107-1": {
+    "gold_topic": "H102",
+    "gold_subtopic": "HS04",
+    "gold_event": "E107"
+  },
+  "dummy-E107-2": {
+    "gold_topic": "H102",
+    "gold_subtopic": "HS04",
+    "gold_event": "E107"
+  },
+  "dummy-E107-3": {
+    "gold_topic": "H102",
+    "gold_subtopic": "HS04",
+    "gold_event": "E107"
+  },
+  "dummy-E107-4": {
+    "gold_topic": "H102",
+    "gold_subtopic": "HS04",
+    "gold_event": "E107"
+  },
+  "dummy-E108-0": {
+    "gold_topic": "H102",
+    "gold_subtopic": "HS05",
+    "gold_event": "E108"
+  },
+  "dummy-E108-1": {
+    "gold_topic": "H102",
+    "gold_subtopic": "HS05",
+    "gold_event": "E108"
+  },
+  "dummy-E108-2": {
+    "gold_topic": "H102",
+    "gold_subtopic": "HS05",
+    "gold_event": "E108"
+  },
+  "dummy-E108-3": {
+    "gold_topic": "H102",
+    "gold_subtopic": "HS05",
+    "gold_event": "E108"
+  },
+  "dummy-E108-4": {
+    "gold_topic": "H102",
+    "gold_subtopic": "HS05",
+    "gold_event": "E108"
+  },
+  "dummy-E109-0": {
+    "gold_topic": "H102",
+    "gold_subtopic": "HS05",
+    "gold_event": "E109"
+  },
+  "dummy-E109-1": {
+    "gold_topic": "H102",
+    "gold_subtopic": "HS05",
+    "gold_event": "E109"
+  },
+  "dummy-E109-2": {
+    "gold_topic": "H102",
+    "gold_subtopic": "HS05",
+    "gold_event": "E109"
+  },
+  "dummy-E109-3": {
+    "gold_topic": "H102",
+    "gold_subtopic": "HS05",
+    "gold_event": "E109"
+  },
+  "dummy-E109-4": {
+    "gold_topic": "H102",
+    "gold_subtopic": "HS05",
+    "gold_event": "E109"
+  },
+  "dummy-E110-0": {
+    "gold_topic": "H103",
+    "gold_subtopic": "HS06",
+    "gold_event": "E110"
+  },
+  "dummy-E110-1": {
+    "gold_topic": "H103",
+    "gold_subtopic": "HS06",
+    "gold_event": "E110"
+  },
+  "dummy-E110-2": {
+    "gold_topic": "H103",
+    "gold_subtopic": "HS06",
+    "gold_event": "E110"
+  },
+  "dummy-E110-3": {
+    "gold_topic": "H103",
+    "gold_subtopic": "HS06",
+    "gold_event": "E110"
+  },
+  "dummy-E110-4": {
+    "gold_topic": "H103",
+    "gold_subtopic": "HS06",
+    "gold_event": "E110"
+  },
+  "dummy-E110-5": {
+    "gold_topic": "H103",
+    "gold_subtopic": "HS06",
+    "gold_event": "E110"
+  },
+  "dummy-E111-0": {
+    "gold_topic": "H103",
+    "gold_subtopic": "HS06",
+    "gold_event": "E111"
+  },
+  "dummy-E111-1": {
+    "gold_topic": "H103",
+    "gold_subtopic": "HS06",
+    "gold_event": "E111"
+  },
+  "dummy-E111-2": {
+    "gold_topic": "H103",
+    "gold_subtopic": "HS06",
+    "gold_event": "E111"
+  },
+  "dummy-E111-3": {
+    "gold_topic": "H103",
+    "gold_subtopic": "HS06",
+    "gold_event": "E111"
+  },
+  "dummy-E111-4": {
+    "gold_topic": "H103",
+    "gold_subtopic": "HS06",
+    "gold_event": "E111"
+  },
+  "dummy-E112-0": {
+    "gold_topic": "H103",
+    "gold_subtopic": "HS07",
+    "gold_event": "E112"
+  },
+  "dummy-E112-1": {
+    "gold_topic": "H103",
+    "gold_subtopic": "HS07",
+    "gold_event": "E112"
+  },
+  "dummy-E112-2": {
+    "gold_topic": "H103",
+    "gold_subtopic": "HS07",
+    "gold_event": "E112"
+  },
+  "dummy-E112-3": {
+    "gold_topic": "H103",
+    "gold_subtopic": "HS07",
+    "gold_event": "E112"
+  },
+  "dummy-E112-4": {
+    "gold_topic": "H103",
+    "gold_subtopic": "HS07",
+    "gold_event": "E112"
+  },
+  "dummy-E113-0": {
+    "gold_topic": "H104",
+    "gold_subtopic": "HS08",
+    "gold_event": "E113"
+  },
+  "dummy-E113-1": {
+    "gold_topic": "H104",
+    "gold_subtopic": "HS08",
+    "gold_event": "E113"
+  },
+  "dummy-E113-2": {
+    "gold_topic": "H104",
+    "gold_subtopic": "HS08",
+    "gold_event": "E113"
+  },
+  "dummy-E113-3": {
+    "gold_topic": "H104",
+    "gold_subtopic": "HS08",
+    "gold_event": "E113"
+  },
+  "dummy-E113-4": {
+    "gold_topic": "H104",
+    "gold_subtopic": "HS08",
+    "gold_event": "E113"
+  },
+  "dummy-E113-5": {
+    "gold_topic": "H104",
+    "gold_subtopic": "HS08",
+    "gold_event": "E113"
+  },
+  "dummy-E114-0": {
+    "gold_topic": "H104",
+    "gold_subtopic": "HS09",
+    "gold_event": "E114"
+  },
+  "dummy-E114-1": {
+    "gold_topic": "H104",
+    "gold_subtopic": "HS09",
+    "gold_event": "E114"
+  },
+  "dummy-E114-2": {
+    "gold_topic": "H104",
+    "gold_subtopic": "HS09",
+    "gold_event": "E114"
+  },
+  "dummy-E114-3": {
+    "gold_topic": "H104",
+    "gold_subtopic": "HS09",
+    "gold_event": "E114"
+  },
+  "dummy-E114-4": {
+    "gold_topic": "H104",
+    "gold_subtopic": "HS09",
+    "gold_event": "E114"
+  },
+  "dummy-E115-0": {
+    "gold_topic": "H104",
+    "gold_subtopic": "HS09",
+    "gold_event": "E115"
+  },
+  "dummy-E115-1": {
+    "gold_topic": "H104",
+    "gold_subtopic": "HS09",
+    "gold_event": "E115"
+  },
+  "dummy-E115-2": {
+    "gold_topic": "H104",
+    "gold_subtopic": "HS09",
+    "gold_event": "E115"
+  },
+  "dummy-E115-3": {
+    "gold_topic": "H104",
+    "gold_subtopic": "HS09",
+    "gold_event": "E115"
+  },
+  "dummy-E115-4": {
+    "gold_topic": "H104",
+    "gold_subtopic": "HS09",
+    "gold_event": "E115"
+  },
+  "dummy-E116-0": {
+    "gold_topic": "H105",
+    "gold_subtopic": "HS10",
+    "gold_event": "E116"
+  },
+  "dummy-E116-1": {
+    "gold_topic": "H105",
+    "gold_subtopic": "HS10",
+    "gold_event": "E116"
+  },
+  "dummy-E116-2": {
+    "gold_topic": "H105",
+    "gold_subtopic": "HS10",
+    "gold_event": "E116"
+  },
+  "dummy-E116-3": {
+    "gold_topic": "H105",
+    "gold_subtopic": "HS10",
+    "gold_event": "E116"
+  },
+  "dummy-E116-4": {
+    "gold_topic": "H105",
+    "gold_subtopic": "HS10",
+    "gold_event": "E116"
+  },
+  "dummy-E116-5": {
+    "gold_topic": "H105",
+    "gold_subtopic": "HS10",
+    "gold_event": "E116"
+  },
+  "dummy-E117-0": {
+    "gold_topic": "H105",
+    "gold_subtopic": "HS10",
+    "gold_event": "E117"
+  },
+  "dummy-E117-1": {
+    "gold_topic": "H105",
+    "gold_subtopic": "HS10",
+    "gold_event": "E117"
+  },
+  "dummy-E117-2": {
+    "gold_topic": "H105",
+    "gold_subtopic": "HS10",
+    "gold_event": "E117"
+  },
+  "dummy-E117-3": {
+    "gold_topic": "H105",
+    "gold_subtopic": "HS10",
+    "gold_event": "E117"
+  },
+  "dummy-E117-4": {
+    "gold_topic": "H105",
+    "gold_subtopic": "HS10",
+    "gold_event": "E117"
+  },
+  "dummy-E118-0": {
+    "gold_topic": "H105",
+    "gold_subtopic": "HS11",
+    "gold_event": "E118"
+  },
+  "dummy-E118-1": {
+    "gold_topic": "H105",
+    "gold_subtopic": "HS11",
+    "gold_event": "E118"
+  },
+  "dummy-E118-2": {
+    "gold_topic": "H105",
+    "gold_subtopic": "HS11",
+    "gold_event": "E118"
+  },
+  "dummy-E118-3": {
+    "gold_topic": "H105",
+    "gold_subtopic": "HS11",
+    "gold_event": "E118"
+  },
+  "dummy-E118-4": {
+    "gold_topic": "H105",
+    "gold_subtopic": "HS11",
+    "gold_event": "E118"
+  },
+  "dummy-E119-0": {
+    "gold_topic": "H105",
+    "gold_subtopic": "HS11",
+    "gold_event": "E119"
+  },
+  "dummy-E119-1": {
+    "gold_topic": "H105",
+    "gold_subtopic": "HS11",
+    "gold_event": "E119"
+  },
+  "dummy-E119-2": {
+    "gold_topic": "H105",
+    "gold_subtopic": "HS11",
+    "gold_event": "E119"
+  },
+  "dummy-E119-3": {
+    "gold_topic": "H105",
+    "gold_subtopic": "HS11",
+    "gold_event": "E119"
+  },
+  "dummy-E119-4": {
+    "gold_topic": "H105",
+    "gold_subtopic": "HS11",
+    "gold_event": "E119"
+  }
+}
