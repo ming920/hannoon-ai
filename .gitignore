@@ -9,6 +9,11 @@ logs/
 
 # eval 실행 산출물 (evaluate.py가 재생성 — 핵심 수치는 eval/README.md 요약 참조)
 eval/results/
+
+# 구 회귀 테스트 도구(han-noon_test.exe): Windows 전용 바이너리라 소스가 없고 macOS에서
+# 실행 불가. eval/constraint_checks.py가 대체하므로 커밋하지 않는다.
+# 데이터는 eval/data/constraints/ 와 eval/data/seed/ 로 이관됐다.
+테스트/
 data/*.db
 data/*.db-shm
 data/*.db-wal
