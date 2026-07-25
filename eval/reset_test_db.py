@@ -2,12 +2,19 @@
 """분류기 출력 테이블을 초기화하여 재실행 환경을 만드는 스크립트.
 
 다음을 초기화한다:
-  - event_articles  전체 삭제
-  - events          전체 삭제 (자기참조 FK prev_event_id/next_event_id 선 NULL 처리)
-  - topic_causes    전체 삭제
-  - topics          전체 삭제
-  - article_ai_results.status → 'done' (이벤트 분류기가 재처리하도록)
-  - articles.embedding, articles.core_content → NULL (분류기가 재계산)
+  - event_articles      전체 삭제
+  - events              전체 삭제 (자기참조 FK prev_event_id/next_event_id 선 NULL 처리)
+  - topic_causes        전체 삭제
+  - topics              전체 삭제
+  - article_ai_results  전체 삭제
+  - articles            guid LIKE 'dummy-%' 만 삭제 (eval 더미 기사만 제거, 실 데이터 보호)
+
+2026-07-12 수정: 이전 버전은 article_ai_results.status를 'done'으로 되돌리고
+articles.embedding/core_content만 NULL 처리할 뿐 실제로 기사를 삭제하지 않았다.
+그 결과 run_iteration.py를 반복 실행할 때마다 articles 테이블에 더미 기사가 계속
+누적되어(예: dev 180건 + holdout 101건이 뒤섞임) 이후 실행의 코퍼스가 오염되는
+하니스 버그가 있었다. 이제 dummy- 접두 guid를 가진 기사와 그 article_ai_results를
+완전히 삭제해 매 실행이 깨끗한 코퍼스에서 시작하도록 한다.
 
 안전 가드 (3중):
   1. EVAL_ALLOW_DESTRUCTIVE_RESET=1 환경변수가 없으면 실행 거부.
@@ -35,13 +42,12 @@ from collector.storage import ensure_db
 
 # 초기화 대상 테이블과 컬럼 목록 (배너 메시지용).
 _CLEAR_SUMMARY = """\
-  - event_articles  : 전체 삭제
-  - events          : 전체 삭제 (prev_event_id / next_event_id 자기참조 먼저 해제)
-  - topic_causes    : 전체 삭제
-  - topics          : 전체 삭제
-  - article_ai_results.status    → 'done'  (분류기 재처리 대상으로 복원)
-  - articles.embedding           → NULL    (분류기가 재계산)
-  - articles.core_content        → NULL    (분류기가 재계산)"""
+  - event_articles      : 전체 삭제
+  - events              : 전체 삭제 (prev_event_id / next_event_id 자기참조 먼저 해제)
+  - topic_causes        : 전체 삭제
+  - topics              : 전체 삭제
+  - article_ai_results  : 전체 삭제
+  - articles            : guid LIKE 'dummy-%' 인 행만 삭제 (eval 더미 기사 전용)"""
 
 
 def _check_safety_guards(database_url: str, allow_remote: bool) -> None:
@@ -108,19 +114,24 @@ def _reset(conn) -> None:
         # 4. topics 삭제 (parent_topic_id 자기참조는 ON DELETE SET NULL 이므로 그냥 삭제 가능)
         conn.execute("DELETE FROM topics")
 
-        # 5. article_ai_results 상태 초기화
-        #    article_ai_status enum: 'pending'|'done'|'failed'|'event_assigned'
-        #    (20260509100000 + 20260604120000 마이그레이션)
-        #    event_assigned 상태인 기사를 'done' 으로 되돌려 분류기가 재처리하도록 한다.
-        conn.execute(
-            "UPDATE article_ai_results SET status = ?, last_error = NULL",
-            ("done",),
-        )
+        # 5. article_ai_results 전체 삭제
+        #    article_ai_results.article_id → articles 는 ON DELETE CASCADE 이지만,
+        #    articles 삭제를 dummy- guid로만 스코프하므로(아래 6) 그 밖의(레거시) 기사에
+        #    남아있을 수 있는 article_ai_results 행까지 명시적으로 비워 재처리 대상에서
+        #    확실히 제외한다.
+        conn.execute("DELETE FROM article_ai_results")
 
-        # 6. articles 임베딩·코어콘텐츠 초기화
-        #    embedding: 20260525120000 (768dim) → 20260612120000 (4096dim)
-        #    core_content: 20260603120000_add_core_content_columns.sql
-        conn.execute("UPDATE articles SET embedding = NULL, core_content = NULL")
+        # 6. articles 삭제 — eval 더미 기사(guid 접두 'dummy-')만 스코프한다.
+        #    이전 버전은 UPDATE로 embedding/core_content만 NULL 처리해 기사 행 자체가
+        #    삭제되지 않았고, 그 결과 반복 실행마다 dev/holdout 기사가 같은 코퍼스에
+        #    누적되는 오염이 있었다 (2026-07-12 발견). guid LIKE 필터는 SQL 리터럴에
+        #    '%'를 그대로 쓰면 안 된다 — PostgresConnection.execute는 params가 없어도
+        #    항상 빈 튜플을 psycopg에 전달하므로 '%'가 포맷 지시자로 파싱되어 깨진다
+        #    (params가 실제로 존재하는지와 무관). 반드시 '%%'로 이스케이프한다.
+        #    event_articles(NO ACTION, 이미 1에서 삭제됨)·article_ai_results(CASCADE,
+        #    이미 5에서 삭제됨) 외에 articles를 참조하는 abusing_articles(NO ACTION)는
+        #    eval 더미 기사를 참조하지 않음을 확인했다.
+        conn.execute("DELETE FROM articles WHERE guid LIKE 'dummy-%%'")
 
 
 def main() -> None:
@@ -169,9 +180,8 @@ def main() -> None:
         _reset(conn)
         print(
             "DB 초기화 완료:\n"
-            "  event_articles / events / topic_causes / topics 삭제,\n"
-            "  article_ai_results.status → 'done',\n"
-            "  articles.embedding / core_content → NULL"
+            "  event_articles / events / topic_causes / topics / article_ai_results 삭제,\n"
+            "  articles: guid LIKE 'dummy-%' 인 행 삭제"
         )
     finally:
         conn.close()

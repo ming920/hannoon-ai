@@ -89,7 +89,14 @@
               "base_date": "2026-06-21",
               "base_facts": "한국과 미국이 워싱턴 D.C.에서 반도체 공급망 협력 MOU를 체결했다. CHIPS법과 연계해 국내 반도체 기업의 미국 공장 투자에 세금 인센티브를 제공하기로 합의했다. 산업통상자원부와 미국 상무부가 공동 서명했으며, 삼성전자·SK하이닉스가 투자 확대를 검토 중이다.",
               "num_articles": 6,
-              "article_category_overrides": ["국제", "국제", "국제", "경제", "경제", "경제"],
+              "article_category_overrides": [
+                "국제",
+                "국제",
+                "국제",
+                "경제",
+                "경제",
+                "경제"
+              ],
               "article_variants_hint": [
                 "외교부 관점 – 한미 동맹 강화 차원의 MOU 체결",
                 "국제부 보도 – 미국 CHIPS법 연계 전략적 의의",
@@ -168,12 +175,13 @@
     },
     {
       "id": "T002",
-      "title": "국내 노동·정치 이슈",
+      "title": "노동개혁 입법 갈등",
       "category": "정치",
       "subtopics": [
         {
-          "id": "S003",
+          "id": "T002",
           "title": "노동개혁 입법 갈등",
+          "_note": "서브토픽 없음 — 이벤트가 토픽에 직결 (Phase 1-2 재구조화, 2026-07-11). id/title을 상위 토픽과 동일하게 두어 gold_labels.json의 gold_subtopic=gold_topic 표기법과 대응시킨다 (annotation_guide.md 부록 참고). 실제 DB에서 서브토픽 없는 토픽은 leaf_topic_id == root_topic_id 로 표현되는 것과 동일한 관례다.",
           "events": [
             {
               "id": "E005",
@@ -234,10 +242,18 @@
               ]
             }
           ]
-        },
+        }
+      ]
+    },
+    {
+      "id": "T006",
+      "title": "2026 지방선거",
+      "category": "정치",
+      "subtopics": [
         {
-          "id": "S004",
-          "title": "2026 지방선거 준비",
+          "id": "T006",
+          "title": "2026 지방선거",
+          "_note": "서브토픽 없음 — 이벤트가 토픽에 직결 (Phase 1-2 재구조화, 2026-07-11). id/title을 상위 토픽과 동일하게 두어 gold_labels.json의 gold_subtopic=gold_topic 표기법과 대응시킨다 (annotation_guide.md 부록 참고). 실제 DB에서 서브토픽 없는 토픽은 leaf_topic_id == root_topic_id 로 표현되는 것과 동일한 관례다.",
           "events": [
             {
               "id": "E007",
@@ -301,12 +317,13 @@
     },
     {
       "id": "T003",
-      "title": "국내 사회·사건사고",
+      "title": "강원 고성 산불",
       "category": "사회",
       "subtopics": [
         {
-          "id": "S006",
-          "title": "대형 산불 재난 대응",
+          "id": "T003",
+          "title": "강원 고성 산불",
+          "_note": "서브토픽 없음 — 이벤트가 토픽에 직결 (Phase 1-2 재구조화, 2026-07-11). id/title을 상위 토픽과 동일하게 두어 gold_labels.json의 gold_subtopic=gold_topic 표기법과 대응시킨다 (annotation_guide.md 부록 참고). 실제 DB에서 서브토픽 없는 토픽은 leaf_topic_id == root_topic_id 로 표현되는 것과 동일한 관례다.",
           "events": [
             {
               "id": "E013",
@@ -348,11 +365,11 @@
             },
             {
               "id": "E015",
-              "title": "강원도 고성 산불 완전 진화 및 피해 집계",
+              "title": "정부 강원 고성 특별재난지역 선포·복구예산 편성",
               "category": "사회",
               "gold_case": "time_window",
-              "gold_case_desc": "E013 발생 8일 후(base_date 2026-06-23) 기사 → 2일 시간창 훨씬 초과. gold_event_ref=E013으로 산불 원 이벤트와 동일 gold_event 유지",
-              "gold_event_ref": "E013",
+              "gold_case_desc": "[2026-07-11 Phase 1-2 재라벨] E013 발생 8일 후(base_date 2026-06-23) 기사라는 표면적 조건은 time_window 케이스와 같으나, 본문에 정부의 '특별재난지역 선포·복구예산 편성'이라는 새로운 독자적 행정 결정이 포함돼 있음이 확인됨(annotation_guide.md 2.3절 c 반례 — \"산불 진화 도중 정부가 별도로 '특별재난지역 선포'를 결정하면 분리\" — 와 사실상 동일 패턴). gold_event_ref를 자기 자신으로 정정해 E013과 별도 이벤트로 분리.",
+              "gold_event_ref": "E015",
               "base_date": "2026-06-23",
               "base_facts": "강원도 고성 산불이 발생 8일 만에 완전 진화됐다. 피해 면적은 총 2200헥타르로 최종 집계됐으며 주택 120채, 농가 건물 85동이 전소됐다. 정부는 고성군을 특별재난지역으로 선포하고 피해 복구 예산 500억 원을 긴급 편성했다. 이재민 850명은 임시 주거시설에서 생활 중이다.",
               "num_articles": 5,
@@ -365,10 +382,18 @@
               ]
             }
           ]
-        },
+        }
+      ]
+    },
+    {
+      "id": "T007",
+      "title": "서울 지하철 추돌사고",
+      "category": "사회",
+      "subtopics": [
         {
-          "id": "S007",
-          "title": "도시 교통 안전사고",
+          "id": "T007",
+          "title": "서울 지하철 추돌사고",
+          "_note": "서브토픽 없음 — 이벤트가 토픽에 직결 (Phase 1-2 재구조화, 2026-07-11). id/title을 상위 토픽과 동일하게 두어 gold_labels.json의 gold_subtopic=gold_topic 표기법과 대응시킨다 (annotation_guide.md 부록 참고). 실제 DB에서 서브토픽 없는 토픽은 leaf_topic_id == root_topic_id 로 표현되는 것과 동일한 관례다.",
           "events": [
             {
               "id": "E016",
@@ -390,7 +415,21 @@
                 "후속 – 서울교통공사 재발 방지 대책 발표",
                 "해설 – 도시철도 안전 관리 체계 현황 점검"
               ]
-            },
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "T008",
+      "title": "부산 지하철 신호장애",
+      "category": "사회",
+      "subtopics": [
+        {
+          "id": "T008",
+          "title": "부산 지하철 신호장애",
+          "_note": "서브토픽 없음 — 이벤트가 토픽에 직결 (Phase 1-2 재구조화, 2026-07-11). id/title을 상위 토픽과 동일하게 두어 gold_labels.json의 gold_subtopic=gold_topic 표기법과 대응시킨다 (annotation_guide.md 부록 참고). 실제 DB에서 서브토픽 없는 토픽은 leaf_topic_id == root_topic_id 로 표현되는 것과 동일한 관례다.",
+          "events": [
             {
               "id": "E017",
               "title": "부산 지하철 1호선 신호 장애로 운행 중단",
@@ -412,10 +451,18 @@
               ]
             }
           ]
-        },
+        }
+      ]
+    },
+    {
+      "id": "T009",
+      "title": "학교폭력 대책",
+      "category": "사회",
+      "subtopics": [
         {
-          "id": "S008",
-          "title": "교육·청소년 정책",
+          "id": "T009",
+          "title": "학교폭력 대책",
+          "_note": "서브토픽 없음 — 이벤트가 토픽에 직결 (Phase 1-2 재구조화, 2026-07-11). id/title을 상위 토픽과 동일하게 두어 gold_labels.json의 gold_subtopic=gold_topic 표기법과 대응시킨다 (annotation_guide.md 부록 참고). 실제 DB에서 서브토픽 없는 토픽은 leaf_topic_id == root_topic_id 로 표현되는 것과 동일한 관례다.",
           "events": [
             {
               "id": "E018",
@@ -427,7 +474,14 @@
               "base_date": "2026-06-21",
               "base_facts": "교육부가 전국 학교 학교폭력 실태조사 결과를 발표하고 근절 종합대책을 내놓았다. 사이버 학교폭력 피해가 전년 대비 23% 증가한 것으로 나타났다. 교육부는 학교폭력 가해 학생 생활기록부 기재 강화, 전담 상담교사 증원, 피해 학생 즉각 분리 원칙 등을 핵심 대책으로 제시했다. 학부모 단체는 환영 입장을, 일부 교사 단체는 현실성 부족을 지적했다.",
               "num_articles": 6,
-              "article_category_overrides": ["사회", "사회", "사회", "정치", "정치", "정치"],
+              "article_category_overrides": [
+                "사회",
+                "사회",
+                "사회",
+                "정치",
+                "정치",
+                "정치"
+              ],
               "article_variants_hint": [
                 "사이버 학교폭력 23% 증가 실태조사 결과 발표 (사회)",
                 "교육부 학교폭력 근절 종합대책 상세 내용 (사회)",
@@ -443,12 +497,13 @@
     },
     {
       "id": "T004",
-      "title": "국내 경제·금융",
+      "title": "한국은행 통화정책",
       "category": "경제",
       "subtopics": [
         {
-          "id": "S009",
+          "id": "T004",
           "title": "한국은행 통화정책",
+          "_note": "서브토픽 없음 — 이벤트가 토픽에 직결 (Phase 1-2 재구조화, 2026-07-11). id/title을 상위 토픽과 동일하게 두어 gold_labels.json의 gold_subtopic=gold_topic 표기법과 대응시킨다 (annotation_guide.md 부록 참고). 실제 DB에서 서브토픽 없는 토픽은 leaf_topic_id == root_topic_id 로 표현되는 것과 동일한 관례다.",
           "events": [
             {
               "id": "E019",
@@ -471,10 +526,17 @@
               ]
             }
           ]
-        },
+        }
+      ]
+    },
+    {
+      "id": "T010",
+      "title": "부동산 정책·시장",
+      "category": "경제",
+      "subtopics": [
         {
-          "id": "S010",
-          "title": "부동산 정책 및 시장",
+          "id": "S015",
+          "title": "매매가격 안정화",
           "events": [
             {
               "id": "E020",
@@ -505,7 +567,14 @@
               "base_date": "2026-06-20",
               "base_facts": "한국부동산원 통계에 따르면 서울 강남·서초·송파 아파트 매매가격이 3개월 연속 상승하며 평균 13억 원을 돌파했다. 분당·판교 등 수도권 인기 지역도 동반 상승하는 추세다. 전문가들은 금리 동결 기대감과 공급 부족이 복합 작용하고 있다고 분석했다. 정부의 부동산 대책이 실효성을 발휘할지 주목된다.",
               "num_articles": 6,
-              "article_category_overrides": ["경제", "경제", "경제", "사회", "사회", "사회"],
+              "article_category_overrides": [
+                "경제",
+                "경제",
+                "경제",
+                "사회",
+                "사회",
+                "사회"
+              ],
               "article_variants_hint": [
                 "강남·서초·송파 평균 13억 돌파 통계 보도 (경제)",
                 "수도권 인기 지역 동반 상승 현황 분석 (경제)",
@@ -514,7 +583,13 @@
                 "세입자 전세보증금 불안 확대 현장 르포 (사회)",
                 "집값 급등 주거 불평등 심화 시민단체 성명 (사회)"
               ]
-            },
+            }
+          ]
+        },
+        {
+          "id": "S016",
+          "title": "전세사기 피해구제",
+          "events": [
             {
               "id": "E022",
               "title": "전세사기 피해구제 특별법 국회 본회의 통과",
@@ -534,10 +609,18 @@
               ]
             }
           ]
-        },
+        }
+      ]
+    },
+    {
+      "id": "T011",
+      "title": "코스피 강세",
+      "category": "경제",
+      "subtopics": [
         {
-          "id": "S011",
-          "title": "주식시장·외환",
+          "id": "T011",
+          "title": "코스피 강세",
+          "_note": "서브토픽 없음 — 이벤트가 토픽에 직결 (Phase 1-2 재구조화, 2026-07-11). id/title을 상위 토픽과 동일하게 두어 gold_labels.json의 gold_subtopic=gold_topic 표기법과 대응시킨다 (annotation_guide.md 부록 참고). 실제 DB에서 서브토픽 없는 토픽은 leaf_topic_id == root_topic_id 로 표현되는 것과 동일한 관례다.",
           "events": [
             {
               "id": "E023",
@@ -558,7 +641,21 @@
                 "보수 매체 – 증시 추가 상승 여력 긍정 전망",
                 "증권가 전문가 – 단기 조정 vs 추가 상승 엇갈린 전망"
               ]
-            },
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "T012",
+      "title": "원달러 환율 급등",
+      "category": "경제",
+      "subtopics": [
+        {
+          "id": "T012",
+          "title": "원달러 환율 급등",
+          "_note": "서브토픽 없음 — 이벤트가 토픽에 직결 (Phase 1-2 재구조화, 2026-07-11). id/title을 상위 토픽과 동일하게 두어 gold_labels.json의 gold_subtopic=gold_topic 표기법과 대응시킨다 (annotation_guide.md 부록 참고). 실제 DB에서 서브토픽 없는 토픽은 leaf_topic_id == root_topic_id 로 표현되는 것과 동일한 관례다.",
+          "events": [
             {
               "id": "E024",
               "title": "원달러 환율 1,400원대 진입",
@@ -584,12 +681,13 @@
     },
     {
       "id": "T005",
-      "title": "국제(비한미) 외교·분쟁",
+      "title": "EU·나토 안보",
       "category": "국제",
       "subtopics": [
         {
-          "id": "S012",
-          "title": "유럽·나토 외교안보",
+          "id": "T005",
+          "title": "EU·나토 안보",
+          "_note": "서브토픽 없음 — 이벤트가 토픽에 직결 (Phase 1-2 재구조화, 2026-07-11). id/title을 상위 토픽과 동일하게 두어 gold_labels.json의 gold_subtopic=gold_topic 표기법과 대응시킨다 (annotation_guide.md 부록 참고). 실제 DB에서 서브토픽 없는 토픽은 leaf_topic_id == root_topic_id 로 표현되는 것과 동일한 관례다.",
           "events": [
             {
               "id": "E025",
@@ -631,10 +729,18 @@
               ]
             }
           ]
-        },
+        }
+      ]
+    },
+    {
+      "id": "T013",
+      "title": "이스라엘-하마스 가자 휴전협상",
+      "category": "국제",
+      "subtopics": [
         {
-          "id": "S013",
-          "title": "중동 분쟁",
+          "id": "T013",
+          "title": "이스라엘-하마스 가자 휴전협상",
+          "_note": "서브토픽 없음 — 이벤트가 토픽에 직결 (Phase 1-2 재구조화, 2026-07-11). id/title을 상위 토픽과 동일하게 두어 gold_labels.json의 gold_subtopic=gold_topic 표기법과 대응시킨다 (annotation_guide.md 부록 참고). 실제 DB에서 서브토픽 없는 토픽은 leaf_topic_id == root_topic_id 로 표현되는 것과 동일한 관례다.",
           "events": [
             {
               "id": "E027",
@@ -656,7 +762,21 @@
                 "후속 – 카타르·이집트·미국 중재국 입장 정리",
                 "해설 – 장기 휴전 가능성 및 협상 전망 분석"
               ]
-            },
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "T014",
+      "title": "이스라엘-헤즈볼라 레바논 교전",
+      "category": "국제",
+      "subtopics": [
+        {
+          "id": "T014",
+          "title": "이스라엘-헤즈볼라 레바논 교전",
+          "_note": "서브토픽 없음 — 이벤트가 토픽에 직결 (Phase 1-2 재구조화, 2026-07-11). id/title을 상위 토픽과 동일하게 두어 gold_labels.json의 gold_subtopic=gold_topic 표기법과 대응시킨다 (annotation_guide.md 부록 참고). 실제 DB에서 서브토픽 없는 토픽은 leaf_topic_id == root_topic_id 로 표현되는 것과 동일한 관례다.",
+          "events": [
             {
               "id": "E028",
               "title": "이스라엘-레바논 국경 헤즈볼라 교전 격화",
@@ -677,10 +797,18 @@
               ]
             }
           ]
-        },
+        }
+      ]
+    },
+    {
+      "id": "T015",
+      "title": "중일 외교",
+      "category": "국제",
+      "subtopics": [
         {
-          "id": "S014",
-          "title": "동아시아 외교",
+          "id": "T015",
+          "title": "중일 외교",
+          "_note": "서브토픽 없음 — 이벤트가 토픽에 직결 (Phase 1-2 재구조화, 2026-07-11). id/title을 상위 토픽과 동일하게 두어 gold_labels.json의 gold_subtopic=gold_topic 표기법과 대응시킨다 (annotation_guide.md 부록 참고). 실제 DB에서 서브토픽 없는 토픽은 leaf_topic_id == root_topic_id 로 표현되는 것과 동일한 관례다.",
           "events": [
             {
               "id": "E029",
@@ -692,7 +820,15 @@
               "base_date": "2026-06-17",
               "base_facts": "일본 외무장관이 베이징을 방문해 중국 외교부장과 회담을 가졌다. 양측은 센카쿠(중국명 댜오위다오) 영토 분쟁, 일본 후쿠시마 오염수 방류 문제, 경제 협력 방안을 논의했다. 중일 관계 개선 신호로 해석됐으나 핵심 현안에서는 입장 차이가 여전했다. 한국 외교부는 중일 회담 결과가 동북아 안보 정세에 미칠 영향을 주시하고 있다고 밝혔다.",
               "num_articles": 7,
-              "article_category_overrides": ["국제", "국제", "국제", "국제", "경제", "경제", "경제"],
+              "article_category_overrides": [
+                "국제",
+                "국제",
+                "국제",
+                "국제",
+                "경제",
+                "경제",
+                "경제"
+              ],
               "article_variants_hint": [
                 "중일 외무장관 베이징 회담 개최 속보 (국제)",
                 "센카쿠 영토 분쟁 회담 결과 보도 (국제)",
