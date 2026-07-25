@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import difflib
 import re
 
 
@@ -76,3 +77,13 @@ def normalize_topic_title(
     if boundary >= int(max_chars * 0.65):
         clipped = clipped[:boundary].rstrip()
     return _TITLE_TRAILING_RE.sub("", clipped)
+
+
+def title_similarity(a: str | None, b: str | None) -> float:
+    """difflib.SequenceMatcher 기반 두 제목의 유사도(0~1)를 반환한다.
+
+    eval/rubric_checks.py의 동명 함수와 동일 알고리즘이다. src는 eval을 임포트할 수
+    없으므로(계층 경계) 여기서 독립적으로 구현하고, 토픽 중복 방지·서브토픽 명명
+    가드(topic_classifier)와 eval 쪽 루브릭 검사가 같은 판정 기준을 공유하게 한다.
+    """
+    return difflib.SequenceMatcher(None, a or "", b or "").ratio()

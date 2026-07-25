@@ -30,8 +30,9 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from db.topic_causes import TopicCandidate, search_candidates
-from db.topics import create_topic, update_topic
+from db.topics import create_topic, find_duplicate_topic, update_topic
 from db.events import Event
+from topic_classifier import naming_rules
 from topic_classifier.pipeline import (
     _reason_rejects_assignment,
     _load_decision_score,
@@ -39,6 +40,8 @@ from topic_classifier.pipeline import (
     _select_candidate,
     _assign_hierarchical,
     _assign_subtopic_by_embedding,
+    _dedup_guard,
+    _sanitize_subtopic_title,
     run,
 )
 import topic_classifier.settings as topic_settings
@@ -547,6 +550,9 @@ class AssignHierarchicalTests(unittest.TestCase):
         # positional 호출: (conn, category, title, summary, parent_id)
         create_args = mock_create.call_args[0]
         self.assertEqual(create_args[4], 10)
+        # 기존 부모 아래 서브 폴백 제목은 이벤트 제목이 아니라 cause 명사구여야 한다
+        # (S-1 이벤트복사형 방지 — 2-3a)
+        self.assertEqual(create_args[2], "원인")
         self.assertIn("create", label)
 
     def test_sub_assign_uses_subtopic_threshold(self):
@@ -802,6 +808,12 @@ class SubtopicPromptTests(unittest.TestCase):
         prompt = self._build()
         self.assertIn("같은 표현을 쓰지 마세요", prompt)
 
+    def test_prompt_bans_time_and_attribute_titles(self):
+        """new_title 규칙에 시간구분형(S-2)·속성형(S-3) 금지 지시가 있어야 한다(2-3a)."""
+        prompt = self._build()
+        self.assertIn("단순 시간 구분으로 짓지 마세요", prompt)
+        self.assertIn("찬반·논조 속성으로 짓지 마세요", prompt)
+
 
 # ── 10. settings — SUBTOPICS_ENABLED 환경변수 파싱 ────────────────────────────
 
@@ -855,12 +867,28 @@ class ParentPromptTests(unittest.TestCase):
             candidates=candidates or [],
         )
 
-    def test_contains_event_and_broad_theme_rules(self):
-        """이벤트 정보와 '넓은 주제' 판단 기준이 프롬프트에 있어야 한다."""
+    def test_contains_event_and_issue_unit_definition(self):
+        """이벤트 정보와 '하나의 사회적 이슈' 판단 기준이 프롬프트에 있어야 한다.
+
+        토픽을 "넓은 주제·도메인"으로 정의하던 이전 문구는 버킷 과병합(covered P 저하)의
+        원인이었다 — docs/entity_definitions.md 기준 이슈 단위 정의로 교체됨(2-4).
+        """
         prompt = self._build()
         self.assertIn("한미 반도체 공급망 MOU 체결", prompt)
-        self.assertIn("넓은 주제", prompt)
+        self.assertIn("하나의 사회적 이슈", prompt)
         self.assertIn("구체적 사건이 서로 달라도 assign", prompt)
+
+    def test_contains_naming_test_rule(self):
+        """네이밍 테스트("<토픽명> — <이벤트명>")가 프롬프트에 명시되어야 한다."""
+        prompt = self._build()
+        self.assertIn("네이밍 테스트", prompt)
+        self.assertIn("<토픽명> — <이벤트명>", prompt)
+
+    def test_bans_generic_category_and_single_event_titles(self):
+        """new_title 생성 규칙에 일반 카테고리명·단일 사건명 금지 지시가 있어야 한다(T-2/T-1)."""
+        prompt = self._build()
+        self.assertIn("일반 뉴스 카테고리명 단독으로 짓지 마세요", prompt)
+        self.assertIn("단일 사건명으로 짓지 마세요", prompt)
 
     def test_contains_action_formats_and_candidate_fallback(self):
         """assign/create 형식 지시와 후보 없음 문구가 있어야 한다."""
@@ -1109,6 +1137,196 @@ class SubtopicThresholdSettingsTests(unittest.TestCase):
         os.environ.pop("TOPIC_SUBTOPIC_MODE", None)
         os.environ.pop("TOPIC_SUBTOPIC_SIM_THRESHOLD", None)
         self._reload_settings()
+
+
+# ── 14. db.topics.find_duplicate_topic — 중복 토픽 검색 ───────────────────────
+
+class FakeQueryConn:
+    """.query() 응답을 스크립트할 수 있는 가짜 연결 (find_duplicate_topic 테스트용)."""
+
+    def __init__(self, rows=None):
+        self._rows = rows or []
+        self.query_calls: list[tuple] = []
+
+    def query(self, sql, params=None):
+        self.query_calls.append((sql, params))
+        return self._rows
+
+
+class FindDuplicateTopicTests(unittest.TestCase):
+    """find_duplicate_topic 이 스코프 내 최고 유사도 토픽을 올바르게 고르는지 검증."""
+
+    def test_empty_title_returns_none(self):
+        conn = FakeQueryConn([{"id": 1, "title": "아무 제목"}])
+        self.assertIsNone(find_duplicate_topic(conn, "사회", "", None, 0.85))
+
+    def test_no_rows_returns_none(self):
+        conn = FakeQueryConn([])
+        self.assertIsNone(find_duplicate_topic(conn, "사회", "새 토픽 제목", None, 0.85))
+
+    def test_exact_match_returns_dup(self):
+        conn = FakeQueryConn([{"id": 7, "title": "전세 사기 피해 대책"}])
+        dup = find_duplicate_topic(conn, "사회", "전세 사기 피해 대책", None, 0.85)
+        self.assertIsNotNone(dup)
+        self.assertEqual(dup["id"], 7)
+        self.assertAlmostEqual(dup["similarity"], 1.0)
+
+    def test_below_threshold_returns_none(self):
+        conn = FakeQueryConn([{"id": 7, "title": "완전히 무관한 이슈 제목"}])
+        self.assertIsNone(find_duplicate_topic(conn, "사회", "전세 사기 피해 대책", None, 0.85))
+
+    def test_picks_highest_similarity_among_multiple_matches(self):
+        conn = FakeQueryConn([
+            {"id": 1, "title": "전세 사기 피해 대책"},
+            {"id": 2, "title": "전세 사기 피해 대책 마련"},
+        ])
+        dup = find_duplicate_topic(conn, "사회", "전세 사기 피해 대책", None, 0.85)
+        self.assertEqual(dup["id"], 1)
+
+    def test_root_scope_queries_parent_is_null(self):
+        """parent_topic_id=None 이면 최상위 스코프 SQL을 써야 한다."""
+        conn = FakeQueryConn([])
+        find_duplicate_topic(conn, "사회", "제목", None, 0.85)
+        sql, params = conn.query_calls[0]
+        self.assertIn("IS NULL", sql)
+        self.assertEqual(params, ("사회",))
+
+    def test_sub_scope_queries_parent_equals(self):
+        """parent_topic_id=10 이면 해당 부모 스코프 SQL과 파라미터를 써야 한다."""
+        conn = FakeQueryConn([])
+        find_duplicate_topic(conn, "사회", "제목", 10, 0.85)
+        sql, params = conn.query_calls[0]
+        self.assertNotIn("IS NULL", sql)
+        self.assertEqual(params, ("사회", 10))
+
+
+# ── 15. topic_classifier.naming_rules — 서브토픽 명명 4규칙 ───────────────────
+
+class NamingRulesTests(unittest.TestCase):
+    """S-1~S-4 판정 함수가 entity_definitions.md 예시를 올바르게 분류하는지 검증."""
+
+    def test_time_segment_titles_detected(self):
+        self.assertTrue(naming_rules.is_time_segment_title("G7 첫째 날"))
+        self.assertTrue(naming_rules.is_time_segment_title("협상 3일차"))
+        self.assertTrue(naming_rules.is_time_segment_title("2주차 진행 상황"))
+
+    def test_non_time_segment_titles_pass(self):
+        self.assertFalse(naming_rules.is_time_segment_title("부정선거 의혹 수사"))
+
+    def test_attribute_titles_detected(self):
+        self.assertTrue(naming_rules.is_attribute_title("찬성 여론"))
+        self.assertTrue(naming_rules.is_attribute_title("반대"))
+
+    def test_compound_noun_not_falsely_flagged_as_attribute(self):
+        """'부정선거'처럼 속성 키워드가 복합명사를 이루면 오탐하면 안 된다."""
+        self.assertFalse(naming_rules.is_attribute_title("부정선거 의혹 수사"))
+
+    def test_event_copy_title_detected(self):
+        self.assertTrue(naming_rules.is_event_copy_title("전세사기 피해자 집단소송 제기", "전세사기 피해자 집단소송 제기"))
+
+    def test_distinct_title_not_event_copy(self):
+        self.assertFalse(naming_rules.is_event_copy_title("전세 보증금 미반환", "전세사기 피해자 집단소송 제기"))
+
+    def test_parent_scope_title_detected(self):
+        self.assertTrue(naming_rules.is_parent_scope_title("의료개혁", "의료개혁"))
+
+    def test_violates_subtopic_naming_returns_none_for_valid_title(self):
+        self.assertIsNone(
+            naming_rules.violates_subtopic_naming(
+                "전공의 집단사직", event_title="정부 의대 증원 발표", parent_title="의료개혁"
+            )
+        )
+
+    def test_violates_subtopic_naming_reports_time_segment_first(self):
+        self.assertEqual(
+            naming_rules.violates_subtopic_naming(
+                "협상 3일차", event_title="어떤 이벤트", parent_title="어떤 부모"
+            ),
+            "S-2 시간구분형",
+        )
+
+    def test_violates_subtopic_naming_reports_empty(self):
+        self.assertEqual(
+            naming_rules.violates_subtopic_naming("", event_title="e", parent_title="p"),
+            "empty",
+        )
+
+
+# ── 16. pipeline._dedup_guard — create 직전 중복 방지 강등 ────────────────────
+
+class DedupGuardTests(unittest.TestCase):
+    """_dedup_guard 가 create 를 assign 으로 강등하는 흐름을 검증."""
+
+    def test_non_create_action_passthrough(self):
+        conn = FakeQueryConn([])
+        decision = {"action": "assign", "topic_id": 5}
+        action, out_decision, chosen = _dedup_guard(
+            conn, "assign", decision, category="사회", parent_topic_id=None, threshold=0.85
+        )
+        self.assertEqual(action, "assign")
+        self.assertIs(out_decision, decision)
+        self.assertIsNone(chosen)
+
+    def test_no_duplicate_found_keeps_create(self):
+        conn = FakeQueryConn([])
+        decision = {"action": "create", "new_title": "새 이슈 제목"}
+        action, _, chosen = _dedup_guard(
+            conn, "create", decision, category="사회", parent_topic_id=None, threshold=0.85
+        )
+        self.assertEqual(action, "create")
+        self.assertIsNone(chosen)
+
+    def test_duplicate_found_demotes_to_assign(self):
+        """유사 제목 기존 토픽이 있으면 create가 assign으로 강등되고 TopicCandidate가 채워져야 한다."""
+        conn = FakePipelineConn()
+        conn.query = lambda sql, params=None: [{"id": 9, "title": "전세 사기 피해 대책"}]
+        conn.query_one = lambda sql, params=None: {
+            "id": 9, "category": "사회", "title": "전세 사기 피해 대책", "summary": "요약",
+        }
+        decision = {"action": "create", "new_title": "전세 사기 피해 대책"}
+        action, out_decision, chosen = _dedup_guard(
+            conn, "create", decision, category="사회", parent_topic_id=None, threshold=0.85
+        )
+        self.assertEqual(action, "assign")
+        self.assertEqual(out_decision["topic_id"], 9)
+        self.assertIsNotNone(chosen)
+        self.assertEqual(chosen.topic_id, 9)
+        self.assertEqual(chosen.title, "전세 사기 피해 대책")
+
+
+# ── 17. pipeline._sanitize_subtopic_title — 명명 규칙 위반 시 재명명 ───────────
+
+class SanitizeSubtopicTitleTests(unittest.TestCase):
+    """_sanitize_subtopic_title 이 위반 시 cause로 재명명하고, 통과 시 그대로 두는지 검증."""
+
+    def test_valid_title_left_unchanged(self):
+        decision = {"action": "create", "new_title": "전공의 집단사직"}
+        _sanitize_subtopic_title(
+            decision, event_title="정부 의대 증원 발표", parent_title="의료개혁", cause="전공의 처우 불만"
+        )
+        self.assertEqual(decision["new_title"], "전공의 집단사직")
+
+    def test_time_segment_title_renamed_with_cause(self):
+        decision = {"action": "create", "new_title": "협상 3일차"}
+        _sanitize_subtopic_title(
+            decision, event_title="이벤트제목", parent_title="부모제목", cause="노사 임금 협상 결렬"
+        )
+        self.assertEqual(decision["new_title"], "노사 임금 협상 결렬")
+
+    def test_event_copy_title_renamed_with_cause(self):
+        decision = {"action": "create", "new_title": "이벤트제목"}
+        _sanitize_subtopic_title(
+            decision, event_title="이벤트제목", parent_title="부모제목", cause="전세 보증금 미반환"
+        )
+        self.assertEqual(decision["new_title"], "전세 보증금 미반환")
+
+    def test_violation_kept_when_cause_also_violates(self):
+        """cause로도 규칙을 위반하면(예: cause가 비어 있음) 원래 제목을 그대로 둔다."""
+        decision = {"action": "create", "new_title": "협상 3일차"}
+        _sanitize_subtopic_title(
+            decision, event_title="이벤트제목", parent_title="부모제목", cause=""
+        )
+        self.assertEqual(decision["new_title"], "협상 3일차")
 
 
 if __name__ == "__main__":

@@ -30,6 +30,11 @@ SUBTOPIC_MODE = os.environ.get("TOPIC_SUBTOPIC_MODE", "embedding").strip().lower
 # 두 데이터셋 동시 스위프 기준 0.65가 강건점(0.65~0.70 플래토): 원본 P 1.00/om 0,
 # 홀드아웃 P 0.93/om 1. 0.55는 홀드아웃에서 과병합(P 0.58)이라 기각.
 SUBTOPIC_SIM_THRESHOLD = float(os.environ.get("TOPIC_SUBTOPIC_SIM_THRESHOLD", "0.65"))
+# create 직전 중복 방지 가드(R-T1/R-S4 대응): 동일 스코프(최상위 또는 같은 부모 아래) 내
+# 기존 토픽과 difflib 제목 유사도가 이 값 이상이면 create를 assign으로 강등한다.
+# 0.85는 eval/rubric_checks.py R-T1(토픽 중복)·R-S4(서브토픽-부모 동일범위) 판정 임계값과
+# 동일하게 맞춰, 파이프라인의 예방 가드와 사후 진단 기준이 같은 눈금을 쓰도록 한다.
+TOPIC_DUP_SIM_THRESHOLD = float(os.environ.get("TOPIC_DUP_SIM_THRESHOLD", "0.85"))
 LLM_MODEL = os.environ.get(
     "LLM_TOPIC_MODEL",
     os.environ.get("LLM_TOPIC_EVENT_MODEL", os.environ.get("LLM_DEFAULT_MODEL", "solar-mini")),

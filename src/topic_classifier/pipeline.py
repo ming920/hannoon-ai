@@ -7,6 +7,7 @@ from db import events, topics, topic_causes
 from db.topic_causes import TopicCandidate
 from embedding import embed_passage, embed_query, to_vector_literal
 from openai_client.client import LLMClient
+from topic_classifier import naming_rules
 from topic_classifier.prompts import (
     build_parent_topic_assignment_prompt,
     build_subtopic_assignment_prompt,
@@ -21,6 +22,7 @@ from topic_classifier.settings import (
     SUBTOPIC_ASSIGN_SCORE_THRESHOLD,
     SUBTOPIC_MODE,
     SUBTOPIC_SIM_THRESHOLD,
+    TOPIC_DUP_SIM_THRESHOLD,
 )
 from summary_utils import normalize_summary, normalize_topic_title
 
@@ -188,17 +190,20 @@ def _resolve_action(
     return action, decision
 
 
-def _assign_subtopic_by_embedding(conn, ev, parent_id):
+def _assign_subtopic_by_embedding(conn, ev, parent_id, cause: str = ""):
     """이벤트 임베딩 코사인 최근접(greedy-max)으로 서브토픽 assign-or-create를 결정한다.
 
     LLM 호출 없이 pgvector 검색만 사용하므로 결정론적이다. 부모가 이번에 새로
     생성되어 parent_id가 None이면 서브토픽 후보가 없으므로 즉시 create.
+    create 시 제목은 cause(원인 명사구)를 우선 사용한다 — ev.title을 그대로 쓰면
+    서브토픽이 이벤트의 1:1 별칭이 되어 명명 규칙 S-1(이벤트복사형)을 위반한다.
+    cause가 없으면(호출부에서 신규 부모라 빈 문자열을 넘긴 경우 등) ev.title로 대체한다.
     반환: (action, decision, chosen) — assign이면 chosen은 TopicCandidate.
     """
     def _create(reason):
         decision = {
             "action": "create",
-            "new_title": ev.title,
+            "new_title": cause or ev.title,
             "score": 0.0,
             "reason": reason,
         }
@@ -244,6 +249,64 @@ def _select_candidate(decision, candidates):
     if topic_id not in candidate_ids:
         raise ValueError(f"LLM selected unknown topic_id={topic_id}.")
     return next(candidate for candidate in candidates if candidate.topic_id == topic_id)
+
+
+def _dedup_guard(conn, action, decision, *, category, parent_topic_id, threshold):
+    """create 결정 시 동일 스코프 내 유사 제목 기존 토픽이 있으면 assign으로 강등한다.
+
+    R-T1(중복·고유사 토픽 쌍)의 예방 가드다. cause 임베딩 후보 검색이 거리 임계값을
+    살짝 벗어나 후보를 놓쳤거나 LLM이 잘못 create를 골랐을 때의 안전망 역할을 한다.
+    candidates 목록에 없는 토픽으로도 병합할 수 있어야 하므로 _select_candidate를
+    거치지 않고 TopicCandidate를 직접 구성해 반환한다.
+    반환: (action, decision, chosen) — 강등되면 chosen에 TopicCandidate, 아니면 chosen=None.
+    """
+    if action != "create":
+        return action, decision, None
+    title = normalize_topic_title(str(decision.get("new_title") or ""))
+    dup = topics.find_duplicate_topic(conn, category, title, parent_topic_id, threshold)
+    if dup is None:
+        return action, decision, None
+    row = conn.query_one(FETCH_TOPIC_BY_ID_SQL, (dup["id"],))
+    if row is None:
+        return action, decision, None
+    chosen = TopicCandidate(
+        topic_id=row["id"],
+        category=row["category"],
+        title=row["title"],
+        summary=row["summary"],
+        distance=1.0 - dup["similarity"],
+        cause_texts=[],
+    )
+    new_decision = {
+        "action": "assign",
+        "topic_id": row["id"],
+        "score": dup["similarity"],
+        "reason": f"제목 유사도 {dup['similarity']:.3f} — 중복 생성 방지로 기존 토픽에 병합",
+    }
+    return "assign", new_decision, chosen
+
+
+def _sanitize_subtopic_title(decision: dict, *, event_title: str, parent_title: str, cause: str) -> None:
+    """서브토픽 create 제목이 명명 4규칙(S-1~S-4)을 위반하면 cause 기반 명사구로
+    재명명을 시도한다. decision을 in-place로 갱신한다.
+
+    cause로도 규칙을 위반하면(드문 경우) 원래 제목을 그대로 둔다 — 완전 차단보다는
+    완화가 목적이며, 잘못된 강제 치환으로 더 나쁜 제목을 만들지 않기 위함이다.
+    """
+    title = str(decision.get("new_title") or "").strip()
+    violation = naming_rules.violates_subtopic_naming(
+        title, event_title=event_title, parent_title=parent_title
+    )
+    if violation is None:
+        return
+    candidate = normalize_topic_title(cause) if cause else ""
+    if candidate and naming_rules.violates_subtopic_naming(
+        candidate, event_title=event_title, parent_title=parent_title
+    ) is None:
+        decision["new_title"] = candidate
+        decision["reason"] = (
+            f"{decision.get('reason', '')} (명명 규칙 위반 {violation} — cause 기반으로 재명명)"
+        ).strip()
 
 
 def _link_chain(conn, leaf_topic_id: int, event_id: int) -> None:
@@ -313,6 +376,10 @@ def _assign_flat(conn, client, ev, cause: str, result: str, top_k: int) -> str:
         lambda: build_topic_assignment_prompt(ev.title, ev.summary, cause, result, candidates),
         fallback_title=ev.title,
     )
+    action, decision, dedup_chosen = _dedup_guard(
+        conn, action, decision,
+        category=ev.category, parent_topic_id=None, threshold=TOPIC_DUP_SIM_THRESHOLD,
+    )
 
     result_embedding = to_vector_literal(embed_passage(result))
     cause_embedding = (
@@ -320,9 +387,10 @@ def _assign_flat(conn, client, ev, cause: str, result: str, top_k: int) -> str:
     )
 
     topic_update = None
-    chosen = None
+    chosen = dedup_chosen
     if action == "assign":
-        chosen = _select_candidate(decision, candidates)
+        if chosen is None:
+            chosen = _select_candidate(decision, candidates)
         topic_update = _generate_topic_update(
             client,
             topic_title=chosen.title,
@@ -400,8 +468,12 @@ def _assign_hierarchical(
             else build_parent_topic_assignment_prompt(ev.title, ev.summary, cause, result, parent_candidates)
         ),
         # 부모 폴백 제목은 이벤트 제목(30자 절단 문장)이 아니라 cause 명사구를 쓴다.
-        # 부모는 여러 사건을 담는 넓은 주제이므로 명사구가 제목으로 더 적합하다.
+        # 부모는 여러 사건을 담는 이슈 단위이므로 명사구가 제목으로 더 적합하다.
         fallback_title=cause or ev.title,
+    )
+    parent_action, parent_decision, parent_dedup_chosen = _dedup_guard(
+        conn, parent_action, parent_decision,
+        category=ev.category, parent_topic_id=None, threshold=TOPIC_DUP_SIM_THRESHOLD,
     )
 
     # 2) 서브토픽 후보 검색 — 부모가 기존 토픽일 때만 부모 스코프로 좁혀 검색한다.
@@ -409,7 +481,7 @@ def _assign_hierarchical(
     parent_chosen = None
     sub_candidates: list = []
     if parent_action == "assign":
-        parent_chosen = _select_candidate(parent_decision, parent_candidates)
+        parent_chosen = parent_dedup_chosen or _select_candidate(parent_decision, parent_candidates)
         parent_title_ctx = parent_chosen.title
         parent_summary_ctx = parent_chosen.summary
         if SUBTOPIC_MODE != "embedding":
@@ -426,11 +498,17 @@ def _assign_hierarchical(
         parent_title_ctx = str(parent_decision["new_title"]).strip()
         parent_summary_ctx = normalize_summary(ev.summary)
 
+    # 서브토픽 폴백 제목은 부모가 기존 토픽일 때만 cause 명사구를 우선한다. 부모까지
+    # 이번에 함께 새로 만들어지는 경우(parent_chosen is None) cause를 쓰면 부모와 서브가
+    # 같은 문자열이 되어 S-4(부모 동일범위)를 유발하므로, 그 경우는 기존대로 ev.title을 쓴다.
+    sub_fallback_title = (cause or ev.title) if parent_chosen is not None else ev.title
+
     sub_chosen = None
     if SUBTOPIC_MODE == "embedding":
         # 서브토픽은 이벤트 임베딩 최근접(greedy-max)으로 결정 — LLM 배정 판단 없음.
         sub_action, sub_decision, sub_chosen = _assign_subtopic_by_embedding(
-            conn, ev, parent_chosen.topic_id if parent_chosen else None
+            conn, ev, parent_chosen.topic_id if parent_chosen else None,
+            cause if parent_chosen is not None else "",
         )
     else:
         sub_action, sub_decision = _resolve_action(
@@ -445,12 +523,27 @@ def _assign_hierarchical(
                 result,
                 sub_candidates,
             ),
-            fallback_title=ev.title,
+            fallback_title=sub_fallback_title,
             # 서브토픽은 과병합 방지를 위해 부모보다 높은 문턱을 쓸 수 있다.
             score_threshold=SUBTOPIC_ASSIGN_SCORE_THRESHOLD,
         )
         if sub_action == "assign":
             sub_chosen = _select_candidate(sub_decision, sub_candidates)
+
+    if sub_action == "create":
+        # 명명 4규칙(S-1~S-4) 위반 시 cause 기반으로 재명명 시도(코드 가드).
+        _sanitize_subtopic_title(
+            sub_decision, event_title=ev.title, parent_title=parent_title_ctx, cause=cause,
+        )
+    if parent_chosen is not None:
+        # 서브토픽 중복 방지: 부모가 기존 토픽일 때만 검사 가능(신규 부모는 서브가 아직 없음).
+        sub_action, sub_decision, dedup_sub_chosen = _dedup_guard(
+            conn, sub_action, sub_decision,
+            category=ev.category, parent_topic_id=parent_chosen.topic_id,
+            threshold=TOPIC_DUP_SIM_THRESHOLD,
+        )
+        if dedup_sub_chosen is not None:
+            sub_chosen = dedup_sub_chosen
 
     # 임베딩: result는 항상 저장, cause는 부모·서브 중 하나라도 새로 생성할 때만 필요.
     result_embedding = to_vector_literal(embed_passage(result))
