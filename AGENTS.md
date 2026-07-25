@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-07-01 | Updated: 2026-07-01 -->
+<!-- Generated: 2026-07-01 | Updated: 2026-07-10 -->
 
 # hannoon-ai
 
@@ -33,6 +33,7 @@ assignment LLM call is skipped entirely and a new event/topic is created directl
 | `docs/` | Design & diagnosis docs (see `docs/AGENTS.md`) |
 | `config/` | `feeds.json` RSS source list (see `config/AGENTS.md`) |
 | `migrations/` | Postgres schema migrations applied manually/via Supabase (see `migrations/AGENTS.md`) |
+| `eval/` | Dummy-data clustering-quality eval harness (article→event→subtopic→topic vs gold labels) (see `eval/AGENTS.md`) |
 
 ## For AI Agents
 
@@ -44,8 +45,10 @@ assignment LLM call is skipped entirely and a new event/topic is created directl
 
 ### Testing Requirements
 - CI runs **only** `python -m compileall -q main.py src` and `python main.py --help`. It does
-  **not** run unit tests — run them yourself: `python -m unittest tests.test_summary_quality`
-  and `python -m unittest tests.test_topic_subtopics`.
+  **not** run unit tests — run them yourself. There are now **8** stdlib `unittest` modules under
+  `tests/`; run the whole suite with `python -m unittest discover -s tests` or a single module
+  such as `python -m unittest tests.test_summary_quality` / `tests.test_topic_subtopics`. See
+  `tests/AGENTS.md` for what each module guards.
 - CI is defined in `.github/workflows/deploy.yml` (push/PR to `develop`); non-PR pushes to
   `develop` rsync-deploy to EC2.
 
@@ -56,9 +59,10 @@ assignment LLM call is skipped entirely and a new event/topic is created directl
   `solar-pro3` calls behind non-empty pgvector candidate sets.
 - **Production schema lives in the sibling `../hannoon-supabase` project, not here.** Any table/
   column this code references must already exist as a Supabase migration. The local
-  `migrations/` SQL (e.g. `0001_topics_parent_topic_id.sql`) must be **ported into a Supabase
-  migration** before it affects production. See `../AGENTS.md` for the full schema-sync contract
-  and the currently-open `topics.parent_topic_id` gap.
+  `migrations/` SQL must be **ported into a Supabase migration** before it affects production.
+  The `topics.parent_topic_id` gap is now **closed**: `0001_topics_parent_topic_id.sql` was ported
+  to `../hannoon-supabase/supabase/migrations/20260701120000_add_topics_parent_topic_id.sql`, so
+  the local file is historical/reference only. See `../AGENTS.md` for the full schema-sync contract.
 
 ## Dependencies
 

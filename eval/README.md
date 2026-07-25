@@ -292,6 +292,75 @@ python eval/run_iteration.py --database-url "postgresql://..." \
 
 ---
 
+## 제약 검사 — 사람 검수 정답 대비 회귀 테스트
+
+위의 지표(ARI/B-cubed/NMI)가 **합성 더미 데이터**에 대한 전역 품질 점수라면, `constraint_checks.py`는
+**사람이 직접 검수한 실제 기사 쌍 제약**을 하나씩 판정한다. 어떤 기사 쌍이 왜 틀렸는지가 그대로
+나오므로 회귀 원인 추적에 쓴다. 두 계열은 대체가 아니라 보완 관계다.
+
+| | 클러스터링 지표 (`evaluate.py`) | 제약 검사 (`constraint_checks.py`) |
+|---|---|---|
+| 정답 출처 | `generate_dummy.py`가 만든 합성 라벨 | 검수자가 손으로 매긴 실제 기사 쌍 |
+| 입력 | Postgres DB 직접 조회 | JSON 파일 2개 (DB 불필요) |
+| 산출 | ARI / B-cubed / NMI / V-measure | must-link·cannot-link 충족률 + 위반 쌍 목록 |
+| 통과 기준 | (게이트 아님) | 기준선 대비 충족률 하락 없음 |
+
+```powershell
+# 1) 측정만 (종료 코드 항상 0)
+python eval/constraint_checks.py eval/data/constraints/review_2026-07-20.json snapshot.json
+
+# 2) 현재 결과를 기준선으로 저장
+python eval/constraint_checks.py `
+    eval/data/constraints/review_2026-07-20.json snapshot.json `
+    --write-baseline eval/data/constraints/baseline.json
+
+# 3) 회귀 게이트 (기준선 대비 하락 시 종료 코드 1)
+python eval/constraint_checks.py `
+    eval/data/constraints/review_2026-07-20.json snapshot.json `
+    --baseline eval/data/constraints/baseline.json
+```
+
+**통과 기준은 "위반 0"이 아니다.** must_link만 이벤트 1,244쌍 + 토픽 1,309쌍이라 LLM 군집화가 전부
+맞출 수는 없고, 그 기준으로는 게이트가 첫날부터 영구 실패해 무용지물이 된다. 실행 간 변동이
+관측되면 `--tolerance 0.02`처럼 허용 하락폭을 준다.
+
+비교 대상 `snapshot.json`을 뽑는 추출 SQL과 입력 형식은 `data/constraints/README.md`에,
+원천 기사 시딩 절차는 `data/seed/README.md`에 있다.
+
+### 위반 원인 진단 — 무엇을 고쳐야 하는지 찾기
+
+충족률은 "얼마나 틀렸나"까지만 알려준다. 같은 must-link 위반이라도 원인이 넷이고
+**처방이 서로 다르다.** `diagnose_violations.py`가 분류기 로그와 대조해 그 넷을 가른다.
+
+| 원인 | 무슨 일이 있었나 | 처방 |
+|---|---|---|
+| **A** | 상대 이벤트가 pgvector 후보에 아예 없었다 | `EVENT_DISTANCE_THRESHOLD` 완화 |
+| **B** | 후보엔 있었지만 프롬프트에서 잘려 LLM이 못 봤다 | `MAX_EVENT_CANDIDATES`(prompts.py) 상향 |
+| **C** | LLM이 보고도 다른 사건이라 판단했다 | 배정 프롬프트 수정 |
+| **D** | LLM은 붙이려 했는데 가드레일이 뒤집었다 | `EVENT_ASSIGN_SCORE_THRESHOLD` 완화 |
+
+```powershell
+# 1) 분류기 로그를 파일로 받는다 (stdout이 JSONL)
+python classify_events.py --database-url "postgresql://..." > events.log
+
+# 2) 정답 + 스냅샷 + 로그를 대조한다
+python eval/diagnose_violations.py `
+    eval/data/constraints/review_2026-07-20.json snapshot.json events.log
+```
+
+**B 유형은 이 도구 없이는 찾을 수 없다.** `EVENT_CANDIDATE_LIMIT`(기본 12)이
+`MAX_EVENT_CANDIDATES`(8)보다 커서, 정답 이벤트가 9~12위에 오면 LLM은 그 후보를 본 적도
+없는데 "다른 사건으로 판단함"으로 기록된다. 임계값을 아무리 만져도 안 고쳐진다.
+
+출력에는 처방 시뮬레이션도 포함된다 — B를 전부 구제할 `MAX_EVENT_CANDIDATES` 최소값과,
+점수 임계값을 낮출 때의 **양방향 트레이드오프**(must-link 구제 vs cannot-link 파손)다.
+단 임계값 변경은 이벤트 구성 자체를 바꿔 이후 후보 목록에 연쇄하므로 **1차 근사**이고,
+최종 확인은 재실행으로 해야 한다.
+
+이벤트 제약만 진단한다. 토픽 분류기는 아직 같은 진단 필드를 로그에 남기지 않는다.
+
+---
+
 ## 규모 단계적 확장 절차
 
 | 단계 | 기사 수 | 정답 이벤트 수 | 목적 |
@@ -316,6 +385,8 @@ eval/
   data/
     dummy_articles.json      # generate_dummy.py 출력
     gold_labels.json         # article_guid → {gold_topic, gold_subtopic, gold_event}
+    constraints/             # 사람 검수 정답 (constraints-v1) — 재생성 불가, 덮어쓰지 말 것
+    seed/                    # 원천 기사 INSERT 덤프 (전체 2,578건 / 부분집합 313건)
   results/                   # (git 미추적 — 실행 시 자동 생성)
     metrics.csv              # 실행별 지표 누적 (CSV_COLUMNS 순서)
     <run-id>.md              # 실행별 상세 리포트
@@ -324,6 +395,9 @@ eval/
   reset_test_db.py           # 분류기 출력 초기화 (3중 안전 가드)
   metrics.py                 # 레벨별 지표 계산 (순수 함수)
   evaluate.py                # DB 예측 읽기 + gold 비교 → 리포트 + CSV 행 추가
+  rubric_checks.py           # 엔티티 정의 루브릭 위반 산출 (DB 스냅샷)
+  constraint_checks.py       # 사람 검수 제약 충족률 + 기준선 회귀 게이트 (JSON 입력, DB 불필요)
+  diagnose_violations.py     # 위반 원인을 분류기 로그와 대조해 A/B/C/D로 진단 + 처방 시뮬레이션
   run_iteration.py           # 전체 사이클 오케스트레이션
   README.md                  # 이 파일
 ```
