@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-07-01 | Updated: 2026-07-01 -->
+<!-- Generated: 2026-07-01 | Updated: 2026-07-10 -->
 
 # docs
 
@@ -11,6 +11,7 @@ Design and diagnosis documentation (Korean). Read these before changing classifi
 |------|-------------|
 | `topic_classification_overview.md` | Design of the topic-grouping stage: cause/result extraction, pgvector `topic_causes` search, assign-or-create, and the optional 2-level hierarchy (`--subtopics`, `topics.parent_topic_id`) |
 | `classification_diagnosis.md` | E2E diagnostic report (2026-06-29) on real data: found 76.8% single-article events (fragmentation), core issue is **over-create** not over-assign; recommends tuning distance threshold (0.45→0.50), widening the 2-day search window, cross-category topic matching, and duplicate-topic detection |
+| `entity_definitions.md` | 2026-07-10 user-confirmed source-of-truth definitions for topic/subtopic/event (purpose, definition, creation criteria, exclusions, examples), each mapped to a machine-checkable rubric ID (R-Exx/R-Sxx/R-Txx) implemented in `../eval/rubric_checks.py`; criteria that can't be machine-checked are marked as manual judgment for Phase 1 gold relabeling |
 
 ## For AI Agents
 
