@@ -73,7 +73,7 @@ SELECT id, category, title, core_content, summary, article_count,
        (embedding <=> ?::vector) AS distance
 FROM events
 WHERE embedding IS NOT NULL
-  AND (updated_at + INTERVAL '2 day' >= ?)
+  AND (updated_at + (?::int * INTERVAL '1 day') >= ?)
   AND (embedding <=> ?::vector) <= ?
 ORDER BY distance ASC
 LIMIT ?
@@ -148,11 +148,19 @@ def search_candidate_events(
     published_at_str: str,
     max_distance: float,
     top_k: int,
+    window_days: int,
 ) -> list[dict]:
     """기사 임베딩과 가까운 기존 이벤트 후보를 pgvector 거리순으로 가져온다."""
     return conn.query(
         SEARCH_CANDIDATE_EVENTS_SQL,
-        (embedding_literal, published_at_str, embedding_literal, max_distance, top_k),
+        (
+            embedding_literal,
+            window_days,
+            published_at_str,
+            embedding_literal,
+            max_distance,
+            top_k,
+        ),
     )
 
 

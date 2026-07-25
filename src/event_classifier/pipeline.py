@@ -17,6 +17,7 @@ from event_classifier.prompts import (
 from event_classifier.settings import (
     ASSIGN_SCORE_THRESHOLD,
     BATCH_SIZE,
+    CANDIDATE_WINDOW_DAYS,
     DISTANCE_THRESHOLD,
     LLM_MODEL,
     TOP_K,
@@ -282,6 +283,7 @@ def process_event_classification(
                     str(art["published_at"]),
                     DISTANCE_THRESHOLD,
                     TOP_K,
+                    CANDIDATE_WINDOW_DAYS,
                 )
                 article_embedding = to_vector_literal(embed_passage(event_embedding_text))
                 if candidates:
