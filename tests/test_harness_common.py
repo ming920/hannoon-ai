@@ -125,6 +125,17 @@ class DrainTests(unittest.TestCase):
         self.assertNotIn("찌꺼기", text)
         self.assertIn("새로운", text)
 
+    def test_append_mode_keeps_earlier_passes(self):
+        # 재개 실행에서 앞선 패스의 진단 로그를 지우면 이미 분류된 기사의 판단 근거가
+        # 사라져 채점 결과를 되짚을 수 없다.
+        self.log.write_text('{"article_id": 1}\n', encoding="utf-8")
+        drain(cmd=_echo_cmd('{"article_id": 2}'), env=os.environ.copy(),
+              remaining_fn=self._countdown([1, 0]), label="t",
+              log_path=self.log, log_mode="a")
+        text = self.log.read_text(encoding="utf-8")
+        self.assertIn('"article_id": 1', text)
+        self.assertIn('"article_id": 2', text)
+
 
 class DrainStderrTests(unittest.TestCase):
     """종료 코드 0 + stderr 실패 조합 — 실제로 시운전을 눈멀게 했던 경로.
@@ -190,6 +201,17 @@ class DrainStderrTests(unittest.TestCase):
         text = self.errlog.read_text(encoding="utf-8")
         self.assertNotIn("찌꺼기", text)
         self.assertIn("새로운 실패", text)
+
+    def test_stderr_log_follows_append_mode(self):
+        # stdout 로그와 같은 모드를 써야 재개 실행에서 실패 이력이 이어진다.
+        self.errlog.write_text("앞선 패스 실패\n", encoding="utf-8")
+        with contextlib.redirect_stderr(io.StringIO()):
+            drain(cmd=_stderr_cmd("이번 패스 실패"), env=os.environ.copy(),
+                  remaining_fn=lambda: 5, label="t",
+                  log_path=self.log, log_mode="a")
+        text = self.errlog.read_text(encoding="utf-8")
+        self.assertIn("앞선 패스 실패", text)
+        self.assertIn("이번 패스 실패", text)
 
 
 class CompareRunsParameterizationTests(unittest.TestCase):

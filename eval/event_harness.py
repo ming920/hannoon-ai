@@ -103,7 +103,9 @@ def count_pending_articles(conn) -> int:
     return int(row["cnt"]) if row else 0
 
 
-def drain_events(cmd: list, env: dict, db_url: str, log_path: Path) -> dict:
+def drain_events(
+    cmd: list, env: dict, db_url: str, log_path: Path, *, log_mode: str = "w"
+) -> dict:
     """대기 기사가 없어질 때까지 이벤트 분류기를 반복 호출하고 stdout을 파일에 모은다."""
     def _remaining() -> int:
         conn = ensure_db("", database_url=db_url)
@@ -114,7 +116,7 @@ def drain_events(cmd: list, env: dict, db_url: str, log_path: Path) -> dict:
 
     return harness_common.drain(
         cmd=cmd, env=env, remaining_fn=_remaining,
-        label="이벤트 드레인", log_path=log_path,
+        label="이벤트 드레인", log_path=log_path, log_mode=log_mode,
     )
 
 
@@ -317,10 +319,19 @@ def main() -> None:
         "--skip-classify", action="store_true",
         help="초기화·분류를 건너뛰고 현재 DB 상태로 채점만 한다",
     )
+    parser.add_argument(
+        "--resume", action="store_true",
+        help="초기화 없이 남은 기사만 이어서 분류한다 (중단된 드레인 재개)",
+    )
     args = parser.parse_args()
 
     if not args.database_url:
         print("오류: --database-url 또는 DATABASE_URL 이 필요합니다.", file=sys.stderr)
+        sys.exit(1)
+
+    if args.skip_classify and args.resume:
+        print("오류: --skip-classify 는 분류를 하지 않으므로 --resume 와 함께 쓸 수 없습니다.",
+              file=sys.stderr)
         sys.exit(1)
 
     out_dir = Path(args.out_dir)
@@ -338,18 +349,25 @@ def main() -> None:
         settings = _read_settings(dotenv_path)
 
         if not args.skip_classify:
-            conn = ensure_db("", database_url=args.database_url)
-            try:
-                before = reset_classifier_output(conn)
-            finally:
-                conn.close()
-            print(f"[초기화] 분류기 출력 삭제 (이벤트 {before['events']:,} / "
-                  f"토픽 {before['topics']:,}), 기사 요약 {before['article_ai_results']:,}건 보존")
+            if args.resume:
+                # 초기화하면 이미 분류한 기사를 다시 태우게 된다. 중단이 잦은 대량 실행에서
+                # 그건 곧 "영원히 못 끝냄"이므로, 남은 잔량만 이어서 돌린다.
+                print("[재개] 초기화를 건너뛰고 남은 기사만 이어서 분류합니다.")
+            else:
+                conn = ensure_db("", database_url=args.database_url)
+                try:
+                    before = reset_classifier_output(conn)
+                finally:
+                    conn.close()
+                print(f"[초기화] 분류기 출력 삭제 (이벤트 {before['events']:,} / "
+                      f"토픽 {before['topics']:,}), "
+                      f"기사 요약 {before['article_ai_results']:,}건 보존")
 
             drain = drain_events(
                 [sys.executable, str(_REPO_ROOT / "classify_events.py"),
                  "--database-url", args.database_url],
                 os.environ.copy(), args.database_url, log_path,
+                log_mode="a" if args.resume else "w",
             )
             if drain["stuck"]:
                 print(f"경고: 미처리 기사 {drain['remaining']}건이 남았습니다.", file=sys.stderr)
@@ -420,10 +438,10 @@ def main() -> None:
     print(f"\n  리포트: {report_path}")
     print(f"  누적  : {csv_path}")
     if not args.skip_classify:
-        # 초기화를 한 경우에만 해당한다. --skip-classify 는 DB를 건드리지 않으므로
-        # 토픽 레이어가 그대로 남아 있고, 이 안내는 사실과 다르다.
-        print("  ※ 이벤트 재분류로 토픽 레이어가 비었습니다. 토픽 지표가 필요하면 "
-              "topic_harness.py 를 이어서 돌리세요.")
+        # 초기화든 재개든 이벤트가 새로 매겨졌으므로 기존 토픽 레이어는 유효하지 않다.
+        # --skip-classify 는 DB를 건드리지 않으므로 해당 없다.
+        print("  ※ 이벤트가 새로 매겨져 토픽 레이어는 유효하지 않습니다. 토픽 지표가 "
+              "필요하면 topic_harness.py 를 이어서 돌리세요.")
     print("═" * 64)
 
 

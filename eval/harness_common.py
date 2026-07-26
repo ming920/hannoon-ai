@@ -146,6 +146,7 @@ def drain(
     label: str,
     log_path: Path,
     hard_cap: int | None = None,
+    log_mode: str = "w",
 ) -> dict:
     """잔량이 0이 될 때까지 분류기를 반복 호출하고 stdout을 파일에 모은다.
 
@@ -160,6 +161,9 @@ def drain(
     무관하게 별도 파일(<로그>-stderr.log)에 남기고 stuck 시 앞부분을 그대로 보여준다.
     stdout 로그는 diagnose_violations 가 JSONL 로 파싱하므로 절대 섞지 않는다.
 
+    log_mode="a" 는 중단된 드레인을 이어서 돌릴 때 쓴다 — 앞선 패스의 진단 로그를 지우면
+    이미 분류된 기사의 판단 근거가 사라져 채점 결과를 되짚을 수 없다.
+
     반환: {"passes", "remaining", "stuck"}
     """
     remaining = remaining_fn()
@@ -169,8 +173,8 @@ def drain(
     log_path.parent.mkdir(parents=True, exist_ok=True)
     stderr_path = log_path.with_name(f"{log_path.stem}-stderr{log_path.suffix}")
     last_stderr = ""
-    with log_path.open("w", encoding="utf-8") as log, \
-            stderr_path.open("w", encoding="utf-8") as errlog:
+    with log_path.open(log_mode, encoding="utf-8") as log, \
+            stderr_path.open(log_mode, encoding="utf-8") as errlog:
         for pass_num in range(1, cap + 1):
             if remaining == 0:
                 print(f"[{label}] 완료 ({pass_num - 1}패스)")

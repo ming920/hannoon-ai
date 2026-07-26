@@ -14,6 +14,7 @@ count_pending_articles 는 분류기의 대상 선정 조건과 **정확히 같�
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -233,6 +234,33 @@ class CompareAndAccumulateTests(unittest.TestCase):
         append_csv(self.path, _metrics(run_id="b"))
         lines = self.path.read_text(encoding="utf-8").strip().splitlines()
         self.assertEqual(len(lines), 3)
+
+
+class ResumeFlagTests(unittest.TestCase):
+    """--resume 는 초기화를 건너뛰므로, --skip-classify 와의 조합을 막아야 한다.
+
+    두 플래그가 함께 통과되면 "재개한다고 해놓고 분류를 아예 안 하는" 실행이 조용히
+    성립한다. DB에 손대기 전에 거부해야 한다.
+    """
+
+    HARNESS = Path(__file__).resolve().parent.parent / "eval" / "event_harness.py"
+
+    def _run(self, *flags):
+        return subprocess.run(
+            [sys.executable, str(self.HARNESS), "--run-id", "t",
+             "--database-url", "postgresql://nowhere/invalid", *flags],
+            capture_output=True, text=True, timeout=60,
+        )
+
+    def test_resume_with_skip_classify_is_rejected(self):
+        result = self._run("--skip-classify", "--resume")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("함께 쓸 수 없습니다", result.stderr)
+
+    def test_resume_flag_is_accepted(self):
+        # 조합 검사를 통과하면 DB 접속까지 진행한다 — 여기서는 접속이 실패하는 게 정상이다.
+        result = self._run("--resume")
+        self.assertNotIn("함께 쓸 수 없습니다", result.stderr)
 
 
 class FormatReportTests(unittest.TestCase):
