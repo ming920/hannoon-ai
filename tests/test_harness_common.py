@@ -12,6 +12,8 @@ drain 과 compare_runs 의 파라미터화만 직접 검증한다.
 """
 from __future__ import annotations
 
+import contextlib
+import io
 import os
 import sys
 import tempfile
@@ -30,6 +32,15 @@ def _echo_cmd(text: str) -> list:
 
 def _fail_cmd() -> list:
     return [sys.executable, "-c", "import sys; sys.stderr.write('boom'); sys.exit(3)"]
+
+
+def _stderr_cmd(text: str) -> list:
+    """stderr 로 실패를 흘리면서 **종료 코드 0** 으로 끝나는 명령.
+
+    분류기의 실제 동작이다 — 기사 단위 예외를 stderr 에 찍고 continue 한 뒤 정상 종료한다.
+    종료 코드만 보면 "정상 종료했는데 잔량이 그대로"라 원인을 되짚을 수 없다.
+    """
+    return [sys.executable, "-c", f"import sys; sys.stderr.write({text!r} + '\\n')"]
 
 
 class DrainTests(unittest.TestCase):
@@ -113,6 +124,72 @@ class DrainTests(unittest.TestCase):
         text = self.log.read_text(encoding="utf-8")
         self.assertNotIn("찌꺼기", text)
         self.assertIn("새로운", text)
+
+
+class DrainStderrTests(unittest.TestCase):
+    """종료 코드 0 + stderr 실패 조합 — 실제로 시운전을 눈멀게 했던 경로.
+
+    분류기가 임베딩 차원 불일치로 전 건 실패했는데 종료 코드는 0이었다. drain 이 stderr 를
+    버리는 바람에 "722 → 722, 원인 불명"만 남았다. 원인 문장은 stderr 에 있었다.
+    """
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.log = Path(self.dir.name) / "drain.log"
+        self.errlog = Path(self.dir.name) / "drain-stderr.log"
+
+    def tearDown(self):
+        self.dir.cleanup()
+
+    def _run_stuck(self, message: str) -> str:
+        """잔량이 줄지 않는 드레인을 돌리고 사용자에게 출력된 stderr 를 돌려준다."""
+        captured = io.StringIO()
+        with contextlib.redirect_stderr(captured):
+            result = drain(cmd=_stderr_cmd(message), env=os.environ.copy(),
+                           remaining_fn=lambda: 5, label="t", log_path=self.log)
+        self.assertTrue(result["stuck"])
+        return captured.getvalue()
+
+    def test_stderr_is_written_to_file_despite_exit_zero(self):
+        self._run_stuck("bge-m3 returned 1024 dimensions")
+        self.assertTrue(self.errlog.exists())
+        self.assertIn("1024 dimensions", self.errlog.read_text(encoding="utf-8"))
+
+    def test_stall_warning_shows_the_cause(self):
+        printed = self._run_stuck("bge-m3 returned 1024 dimensions")
+        self.assertIn("잔량이 줄지 않았습니다", printed)
+        self.assertIn("1024 dimensions", printed)
+        self.assertIn(str(self.errlog), printed)
+
+    def test_stdout_log_stays_free_of_stderr(self):
+        # stdout 로그는 diagnose_violations 가 JSONL 로 파싱한다 — stderr 가 섞이면 깨진다.
+        self._run_stuck("실패 메시지")
+        self.assertNotIn("실패 메시지", self.log.read_text(encoding="utf-8"))
+
+    def test_preview_is_capped_and_remainder_is_counted(self):
+        # 전 건이 같은 이유로 실패하는 상황 — 앞 5줄이면 원인 판별에 충분하고,
+        # 나머지는 줄 수만 알려준 뒤 전문 경로로 넘긴다.
+        printed = self._run_stuck("\n".join(f"기사 {i} 실패" for i in range(9)))
+        self.assertIn("총 9줄", printed)
+        self.assertIn("기사 0 실패", printed)
+        self.assertIn("기사 4 실패", printed)
+        self.assertNotIn("기사 5 실패", printed)
+        self.assertIn("나머지 4줄", printed)
+
+    def test_silent_failure_is_called_out(self):
+        # stderr 조차 없으면 그 사실 자체가 진단이다 — 조용히 넘어가면 안 된다.
+        printed = io.StringIO()
+        with contextlib.redirect_stderr(printed):
+            drain(cmd=_echo_cmd("x"), env=os.environ.copy(),
+                  remaining_fn=lambda: 5, label="t", log_path=self.log)
+        self.assertIn("stderr 없음", printed.getvalue())
+
+    def test_stderr_log_is_truncated_per_run(self):
+        self.errlog.write_text("이전 실행 찌꺼기\n", encoding="utf-8")
+        self._run_stuck("새로운 실패")
+        text = self.errlog.read_text(encoding="utf-8")
+        self.assertNotIn("찌꺼기", text)
+        self.assertIn("새로운 실패", text)
 
 
 class CompareRunsParameterizationTests(unittest.TestCase):

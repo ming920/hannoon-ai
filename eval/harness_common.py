@@ -155,6 +155,11 @@ def drain(
     한 패스에서 잔량이 줄지 않으면 영구 실패 항목이 있다는 뜻이므로 중단한다 — 그대로 두면
     hard_cap 까지 같은 실패를 반복하며 API 비용만 태운다.
 
+    분류기는 기사 단위 실패를 stderr 로 흘리고 **종료 코드 0** 으로 끝난다. 종료 코드만 보면
+    "정상 종료했는데 잔량이 그대로"라는 진단 불가능한 상태가 되므로, stderr 는 종료 코드와
+    무관하게 별도 파일(<로그>-stderr.log)에 남기고 stuck 시 앞부분을 그대로 보여준다.
+    stdout 로그는 diagnose_violations 가 JSONL 로 파싱하므로 절대 섞지 않는다.
+
     반환: {"passes", "remaining", "stuck"}
     """
     remaining = remaining_fn()
@@ -162,7 +167,10 @@ def drain(
     print(f"[{label}] 잔량 {remaining}건, 최대 {cap}패스")
 
     log_path.parent.mkdir(parents=True, exist_ok=True)
-    with log_path.open("w", encoding="utf-8") as log:
+    stderr_path = log_path.with_name(f"{log_path.stem}-stderr{log_path.suffix}")
+    last_stderr = ""
+    with log_path.open("w", encoding="utf-8") as log, \
+            stderr_path.open("w", encoding="utf-8") as errlog:
         for pass_num in range(1, cap + 1):
             if remaining == 0:
                 print(f"[{label}] 완료 ({pass_num - 1}패스)")
@@ -174,6 +182,12 @@ def drain(
             if result.stdout:
                 log.write(result.stdout)
                 log.flush()
+            if result.stderr:
+                last_stderr = result.stderr
+                errlog.write(f"── 패스 {pass_num} ──\n{result.stderr}")
+                if not result.stderr.endswith("\n"):
+                    errlog.write("\n")
+                errlog.flush()
             if result.returncode != 0:
                 if result.stderr:
                     print(result.stderr, file=sys.stderr)
@@ -189,6 +203,31 @@ def drain(
                     f"({prev} → {remaining}). 영구 실패 항목이 있을 수 있어 중단합니다.",
                     file=sys.stderr,
                 )
+                _report_stall_stderr(last_stderr, stderr_path)
                 return {"passes": pass_num, "remaining": remaining, "stuck": True}
 
+    _report_stall_stderr(last_stderr, stderr_path)
     return {"passes": cap, "remaining": remaining, "stuck": True}
+
+
+STALL_STDERR_PREVIEW_LINES = 5
+
+
+def _report_stall_stderr(last_stderr: str, stderr_path: Path) -> None:
+    """드레인이 멈췄을 때 마지막 패스의 stderr 앞부분을 보여준다.
+
+    같은 실패가 반복되는 상황이라 앞 몇 줄이면 원인 판별에 충분하다.
+    """
+    lines = [line for line in last_stderr.splitlines() if line.strip()]
+    if not lines:
+        print(
+            f"  분류기 stderr 없음 — 실패 원인이 기록되지 않았습니다 ({stderr_path})",
+            file=sys.stderr,
+        )
+        return
+    print(f"  분류기 stderr (마지막 패스, 총 {len(lines)}줄):", file=sys.stderr)
+    for line in lines[:STALL_STDERR_PREVIEW_LINES]:
+        print(f"    {line}", file=sys.stderr)
+    if len(lines) > STALL_STDERR_PREVIEW_LINES:
+        print(f"    … 나머지 {len(lines) - STALL_STDERR_PREVIEW_LINES}줄", file=sys.stderr)
+    print(f"  전문: {stderr_path}", file=sys.stderr)
