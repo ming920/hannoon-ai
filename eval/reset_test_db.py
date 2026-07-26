@@ -50,10 +50,16 @@ _CLEAR_SUMMARY = """\
   - articles            : guid LIKE 'dummy-%' 인 행만 삭제 (eval 더미 기사 전용)"""
 
 
-def _check_safety_guards(database_url: str, allow_remote: bool) -> None:
+def _check_safety_guards(
+    database_url: str, allow_remote: bool, clear_summary: str = _CLEAR_SUMMARY
+) -> None:
     """프로덕션 DB 오염을 방지하는 안전 가드 3중 검사.
 
     DB 연결 전에 호출해 연결 비용 없이 빠르게 거부한다.
+
+    clear_summary는 배너에 출력할 "무엇을 지우는지" 문구다. reset_classifier_only.py가
+    이 가드를 공유하되 자기 삭제 범위를 정확히 알리도록 파라미터로 뺐다 — 안전 가드를
+    복사해 두면 두 벌이 갈라지므로 한 벌만 유지한다.
     """
     # 가드 1: 전용 환경변수 확인
     if not os.environ.get("EVAL_ALLOW_DESTRUCTIVE_RESET"):
@@ -84,7 +90,7 @@ def _check_safety_guards(database_url: str, allow_remote: bool) -> None:
     # 가드 통과 — 배너 출력
     print(
         "!!! 경고: 다음 데이터를 삭제/초기화합니다 !!!\n"
-        f"{_CLEAR_SUMMARY}\n"
+        f"{clear_summary}\n"
         f"  대상 DB 호스트: {host or '(소켓/로컬)'}"
     )
 
