@@ -11,6 +11,7 @@
 """
 from __future__ import annotations
 
+import json
 import os
 import sys
 import unittest
@@ -23,14 +24,24 @@ from diagnose_violations import (  # noqa: E402
     CAUSE_C,
     CAUSE_D,
     CAUSE_NO_LOG,
+    T_A_NOT_RETRIEVED,
+    T_B_TRUNCATED,
+    T_C_LLM_REJECTED,
+    T_D_GUARDRAIL,
+    T_EVENT_PROPAGATED,
+    T_NO_LOG,
+    T_SUBTOPIC_SPLIT,
     diagnose_cannot_link,
     diagnose_must_link,
+    diagnose_topic_must_link,
     find_candidate,
     find_guardrail_saves,
     parse_decision_logs,
+    parse_topic_logs,
     run_diagnosis,
     satisfied_pairs,
     simulate_score_threshold,
+    topic_scope_of,
 )
 
 
@@ -379,6 +390,211 @@ class TestRunDiagnosis(unittest.TestCase):
 
     def test_diagnoses_cover_every_violation(self):
         self.assertEqual(len(self.r["must_link_diagnoses"]), 4)
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 토픽 제약 진단
+# ══════════════════════════════════════════════════════════════════════════
+
+
+def _tlog(event_id, level, *, candidates=(), llm=None, overridden=False,
+          decided_by="llm", final_action="create", final_topic_id=None):
+    return {
+        "event_id": event_id,
+        "level": level,
+        "cause": f"원인-{event_id}",
+        "candidate_count": len(candidates),
+        "candidates": list(candidates),
+        "llm_decision": llm or {"action": "create", "topic_id": None, "score": 0.0, "reason": ""},
+        "overridden": overridden,
+        "dedup_merged": False,
+        "decided_by": decided_by,
+        "final_action": final_action,
+        "final_topic_id": final_topic_id,
+    }
+
+
+def _tcand(topic_id, distance=0.3, shown=True):
+    return {"topic_id": topic_id, "distance": distance, "shown_to_llm": shown, "title": "t"}
+
+
+class TestParseTopicLogs(unittest.TestCase):
+    def test_keys_by_event_and_level(self):
+        text = "\n".join([
+            "[topic] 배치 시작: 2건",
+            json.dumps({"event_id": 5, "level": "parent"}),
+            json.dumps({"event_id": 5, "level": "subtopic"}),
+        ])
+        logs, order = parse_topic_logs(text)
+        self.assertEqual(set(logs), {(5, "parent"), (5, "subtopic")})
+        self.assertEqual(order, {5: 0})
+
+    def test_order_counts_events_not_lines(self):
+        text = "\n".join([
+            json.dumps({"event_id": 9, "level": "parent"}),
+            json.dumps({"event_id": 9, "level": "subtopic"}),
+            json.dumps({"event_id": 3, "level": "flat"}),
+        ])
+        _, order = parse_topic_logs(text)
+        self.assertEqual(order, {9: 0, 3: 1})
+
+    def test_skips_event_classifier_logs(self):
+        # 이벤트 로그는 level이 없으므로 걸러져야 한다.
+        logs, _ = parse_topic_logs(json.dumps({"article_id": 1, "main_event": "x"}))
+        self.assertEqual(logs, {})
+
+    def test_skips_malformed(self):
+        logs, _ = parse_topic_logs('{broken\n{"event_id": 1, "level": "flat"}')
+        self.assertEqual(set(logs), {(1, "flat")})
+
+
+class TestTopicScopeOf(unittest.TestCase):
+    def test_flat_mode_parent_equals_leaf(self):
+        logs = {(1, "flat"): _tlog(1, "flat", final_topic_id=70)}
+        scope = topic_scope_of(logs, 1)
+        self.assertEqual(scope["parent"], 70)
+        self.assertEqual(scope["leaf"], 70)
+        self.assertEqual(scope["mode"], "flat")
+
+    def test_hierarchical_mode(self):
+        logs = {
+            (1, "parent"): _tlog(1, "parent", final_topic_id=70),
+            (1, "subtopic"): _tlog(1, "subtopic", final_topic_id=71),
+        }
+        scope = topic_scope_of(logs, 1)
+        self.assertEqual((scope["parent"], scope["leaf"]), (70, 71))
+        self.assertEqual(scope["mode"], "hierarchical")
+
+    def test_missing_event_returns_empty(self):
+        self.assertEqual(topic_scope_of({}, 1), {})
+
+
+class TestDiagnoseTopicMustLink(unittest.TestCase):
+    # 기사 1 → 이벤트 100, 기사 2 → 이벤트 200 (다른 이벤트라야 토픽 위반이 성립)
+    EV = {1: 100, 2: 200}
+    ORDER = {100: 0, 200: 1}  # 이벤트 100이 먼저 처리됨
+
+    def test_event_propagation_takes_priority(self):
+        # 이벤트 must-link도 위반이면 토픽 레버로는 못 고친다.
+        d = diagnose_topic_must_link([1, 2], self.EV, {}, self.ORDER, {frozenset((1, 2))})
+        self.assertEqual(d["cause"], T_EVENT_PROPAGATED)
+
+    def test_same_event_is_snapshot_inconsistency(self):
+        d = diagnose_topic_must_link([1, 2], {1: 100, 2: 100}, {}, self.ORDER, set())
+        self.assertEqual(d["cause"], T_NO_LOG)
+        self.assertIn("스냅샷", d["note"])
+
+    def test_missing_article_from_snapshot(self):
+        d = diagnose_topic_must_link([1, 9], self.EV, {}, self.ORDER, set())
+        self.assertEqual(d["cause"], T_NO_LOG)
+
+    def test_subtopic_split_when_parent_matches(self):
+        logs = {
+            (100, "parent"): _tlog(100, "parent", final_topic_id=70),
+            (100, "subtopic"): _tlog(100, "subtopic", final_topic_id=71),
+            (200, "parent"): _tlog(200, "parent", final_topic_id=70),
+            (200, "subtopic"): _tlog(200, "subtopic", final_topic_id=72,
+                                     decided_by="embedding"),
+        }
+        d = diagnose_topic_must_link([1, 2], self.EV, logs, self.ORDER, set())
+        self.assertEqual(d["cause"], T_SUBTOPIC_SPLIT)
+        self.assertEqual(d["parent_topic"], 70)
+        self.assertEqual(d["leaves"], [71, 72])
+        self.assertEqual(d["decided_by"], "embedding")
+
+    def _parent_case(self, later_parent_log):
+        logs = {
+            (100, "flat"): _tlog(100, "flat", final_topic_id=70),
+            (200, "flat"): later_parent_log,
+        }
+        return diagnose_topic_must_link([1, 2], self.EV, logs, self.ORDER, set())
+
+    def test_a_when_target_topic_not_retrieved(self):
+        d = self._parent_case(
+            _tlog(200, "flat", candidates=[_tcand(999)], final_topic_id=80)
+        )
+        self.assertEqual(d["cause"], T_A_NOT_RETRIEVED)
+        self.assertEqual(d["target_topic"], 70)
+        self.assertEqual(d["landed_topic"], 80)
+
+    def test_b_when_truncated(self):
+        d = self._parent_case(
+            _tlog(200, "flat",
+                  candidates=[_tcand(999), _tcand(70, shown=False)], final_topic_id=80)
+        )
+        self.assertEqual(d["cause"], T_B_TRUNCATED)
+        self.assertEqual(d["rank"], 1)
+
+    def test_c_when_llm_rejected(self):
+        d = self._parent_case(
+            _tlog(200, "flat", candidates=[_tcand(70)],
+                  llm={"action": "create", "topic_id": None, "score": 0.0, "reason": "다른 이슈"},
+                  final_topic_id=80)
+        )
+        self.assertEqual(d["cause"], T_C_LLM_REJECTED)
+
+    def test_d_when_guardrail_overrode(self):
+        d = self._parent_case(
+            _tlog(200, "flat", candidates=[_tcand(70)],
+                  llm={"action": "assign", "topic_id": 70, "score": 0.6, "reason": "비슷"},
+                  overridden=True, final_topic_id=80)
+        )
+        self.assertEqual(d["cause"], T_D_GUARDRAIL)
+        self.assertEqual(d["llm_score"], 0.6)
+
+    def test_no_log_when_event_absent_from_topic_log(self):
+        d = diagnose_topic_must_link([1, 2], self.EV, {}, {100: 0}, set())
+        self.assertEqual(d["cause"], T_NO_LOG)
+        self.assertEqual(d["missing_events_from_log"], [200])
+
+
+class TestRunDiagnosisWithTopics(unittest.TestCase):
+    GOLD = {
+        "schema_version": "constraints-v1",
+        "reviewer": "정예은_오재민",
+        "event_constraints": {"must_link": [[1, 2]], "cannot_link": []},
+        # 기사 1·3은 같은 토픽이어야 하는데 갈렸다 (이벤트 제약과 무관한 순수 토픽 문제)
+        "topic_constraints": {"must_link": [[1, 3]], "cannot_link": []},
+    }
+    SNAPSHOT = {
+        "events": [
+            {"id": 100, "articles": [{"id": 1}]},
+            {"id": 200, "articles": [{"id": 2}]},
+            {"id": 300, "articles": [{"id": 3}]},
+        ],
+        "topics": [
+            {"id": 70, "events": [{"id": 100, "article_ids": [1]},
+                                  {"id": 200, "article_ids": [2]}]},
+            {"id": 80, "events": [{"id": 300, "article_ids": [3]}]},
+        ],
+    }
+
+    def setUp(self):
+        topic_text = "\n".join([
+            json.dumps(_tlog(100, "flat", final_topic_id=70)),
+            json.dumps(_tlog(200, "flat", final_topic_id=70)),
+            json.dumps(_tlog(300, "flat", candidates=[_tcand(999)], final_topic_id=80)),
+        ])
+        tlogs, torder = parse_topic_logs(topic_text)
+        self.r = run_diagnosis(self.GOLD, self.SNAPSHOT, {}, {}, tlogs, torder)
+
+    def test_topic_meta_counts(self):
+        meta = self.r["meta"]
+        self.assertEqual(meta["topic_must_link_total"], 1)
+        self.assertEqual(meta["topic_must_link_violated"], 1)
+        self.assertEqual(meta["topic_cannot_link_total"], 0)
+        self.assertTrue(meta["topic_logs_present"])
+        self.assertEqual(meta["events_in_topic_log"], 3)
+
+    def test_topic_cause_is_diagnosed(self):
+        self.assertEqual(self.r["topic_must_link_causes"][T_A_NOT_RETRIEVED], 1)
+
+    def test_without_topic_logs_diagnosis_is_skipped(self):
+        r = run_diagnosis(self.GOLD, self.SNAPSHOT, {}, {})
+        self.assertFalse(r["meta"]["topic_logs_present"])
+        self.assertEqual(r["topic_must_link_diagnoses"], [])
+        # 위반 집계 자체는 로그 없이도 나온다.
+        self.assertEqual(r["meta"]["topic_must_link_violated"], 1)
 
 
 if __name__ == "__main__":

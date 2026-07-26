@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import sys
 
@@ -9,6 +10,7 @@ from embedding import embed_passage, embed_query, to_vector_literal
 from openai_client.client import LLMClient
 from topic_classifier import naming_rules
 from topic_classifier.prompts import (
+    MAX_CANDIDATES,
     build_parent_topic_assignment_prompt,
     build_subtopic_assignment_prompt,
     build_topic_assignment_prompt,
@@ -112,6 +114,62 @@ def _load_decision_score(decision: dict) -> float:
         return 0.0
 
 
+def build_topic_decision_log(
+    *,
+    event_id: int,
+    level: str,
+    cause: str,
+    candidates: list,
+    llm_decision: dict,
+    overridden: bool,
+    dedup_merged: bool,
+    decided_by: str,
+    final_action: str,
+    final_topic_id: int | None,
+) -> dict:
+    """이벤트 1건의 토픽 배정 판단을 진단 가능한 형태로 직렬화한다.
+
+    이벤트 분류기의 build_decision_log와 같은 역할이되, 토픽 경로에만 있는 결정 지점이
+    둘 더 있다.
+
+      dedup_merged  _dedup_guard가 create를 assign으로 **강등**했다. 가드레일(overridden)과
+                    방향이 반대다 — must-link에는 도움이 되지만 cannot-link를 깰 수 있다.
+      decided_by    서브토픽은 SUBTOPIC_MODE=embedding일 때 LLM 없이 임베딩 최근접으로만
+                    정해진다. 이 경우 후보 목록이 비어 있는 것이 정상이며, 거리·프롬프트
+                    레버가 애초에 적용되지 않는다.
+
+    level은 "flat"(평면 모드) / "parent" / "subtopic"(계층 모드) 중 하나다.
+    DB·LLM 의존이 없는 순수 함수로 둬서 단위 테스트로 고정한다.
+    """
+    return {
+        "event_id": event_id,
+        "level": level,
+        "cause": cause,
+        "candidate_count": len(candidates),
+        "candidates": [
+            {
+                "topic_id": candidate.topic_id,
+                "distance": round(float(candidate.distance or 0), 4),
+                # 검색은 top_k개까지 하지만 프롬프트에는 앞 MAX_CANDIDATES개만 들어간다.
+                "shown_to_llm": rank < MAX_CANDIDATES,
+                "title": str(candidate.title or "")[:60],
+            }
+            for rank, candidate in enumerate(candidates)
+        ],
+        "llm_decision": llm_decision,
+        "overridden": overridden,
+        "dedup_merged": dedup_merged,
+        "decided_by": decided_by,
+        "final_action": final_action,
+        "final_topic_id": final_topic_id,
+    }
+
+
+def _emit_decision_log(**kwargs) -> None:
+    """진단 로그를 stdout에 JSONL 한 줄로 내보낸다 (eval/diagnose_violations.py 입력)."""
+    print(json.dumps(build_topic_decision_log(**kwargs), ensure_ascii=False))
+
+
 def _load_topic_summary_events(conn, topic_id: int) -> list[dict]:
     return [
         {
@@ -148,6 +206,7 @@ def _resolve_action(
     fallback_title,
     fallback_reason="검색 후보 없음",
     score_threshold=ASSIGN_SCORE_THRESHOLD,
+    diag=None,
 ):
     """assign-or-create 결정을 공통 처리한다.
 
@@ -155,6 +214,10 @@ def _resolve_action(
     결정한다(비용 전략 핵심). 이어서 점수/사유 가드레일을 적용해 모순된 assign을
     create로 강등한 뒤 (action, decision)을 반환한다. 평면·계층 분류가 모두 재사용한다.
     score_threshold로 경로별(부모/서브) assign 점수 문턱을 달리 줄 수 있다.
+
+    diag에 dict를 넘기면 진단용 정보(가드레일이 덮어쓰기 전의 LLM 원본 판단, 강등 여부)를
+    거기 채워 넣는다. 반환 타입을 바꾸지 않는 이유는 기존 호출부·테스트 14곳이 2-튜플
+    언패킹에 의존하기 때문이다 — 선택적 out-파라미터가 그 계약을 깨지 않는 방법이다.
     """
     if candidates:
         decision = _call_json(client, build_prompt(), required_keys={"action"})
@@ -166,6 +229,17 @@ def _resolve_action(
             "reason": fallback_reason,
         }
 
+    if diag is not None:
+        # 아래 가드레일 분기가 decision을 통째로 교체하므로, 그 전에 LLM 원본 판단을 뜬다.
+        diag["llm_decision"] = {
+            "action": decision.get("action"),
+            "topic_id": decision.get("topic_id"),
+            "score": _load_decision_score(decision),
+            "reason": str(decision.get("reason") or ""),
+        }
+        diag["overridden"] = False
+        diag["decided_by"] = "llm" if candidates else "no_candidates"
+
     action = decision["action"]
     if action not in {"assign", "create"}:
         raise ValueError(f"Invalid topic action from LLM: {action!r}")
@@ -173,6 +247,8 @@ def _resolve_action(
         _load_decision_score(decision) < score_threshold
         or _reason_rejects_assignment(decision.get("reason"))
     ):
+        if diag is not None:
+            diag["overridden"] = True
         decision = {
             "action": "create",
             "new_title": fallback_title,
@@ -370,11 +446,13 @@ def _assign_flat(conn, client, ev, cause: str, result: str, top_k: int) -> str:
         DISTANCE_THRESHOLD,
         top_k,
     )
+    diag: dict = {}
     action, decision = _resolve_action(
         client,
         candidates,
         lambda: build_topic_assignment_prompt(ev.title, ev.summary, cause, result, candidates),
         fallback_title=ev.title,
+        diag=diag,
     )
     action, decision, dedup_chosen = _dedup_guard(
         conn, action, decision,
@@ -430,6 +508,18 @@ def _assign_flat(conn, client, ev, cause: str, result: str, top_k: int) -> str:
 
         _link_chain(conn, topic_id, ev.id)
 
+    _emit_decision_log(
+        event_id=ev.id,
+        level="flat",
+        cause=cause,
+        candidates=candidates,
+        llm_decision=diag.get("llm_decision", {}),
+        overridden=diag.get("overridden", False),
+        dedup_merged=dedup_chosen is not None,
+        decided_by=diag.get("decided_by", "llm"),
+        final_action=action,
+        final_topic_id=topic_id,
+    )
     return "create" if action == "create" else f"assign {topic_id}"
 
 
@@ -459,6 +549,7 @@ def _assign_hierarchical(
     # 그 외(기본값 "broad") → 광의 테마 프롬프트(build_parent_topic_assignment_prompt).
     # 이 변수는 .env 에 넣지 않으므로, 프로세스 환경변수 주입이 그대로 유효하다.
     parent_prompt_mode = os.getenv("PARENT_PROMPT_MODE", "broad")
+    parent_diag: dict = {}
     parent_action, parent_decision = _resolve_action(
         client,
         parent_candidates,
@@ -470,6 +561,7 @@ def _assign_hierarchical(
         # 부모 폴백 제목은 이벤트 제목(30자 절단 문장)이 아니라 cause 명사구를 쓴다.
         # 부모는 여러 사건을 담는 이슈 단위이므로 명사구가 제목으로 더 적합하다.
         fallback_title=cause or ev.title,
+        diag=parent_diag,
     )
     parent_action, parent_decision, parent_dedup_chosen = _dedup_guard(
         conn, parent_action, parent_decision,
@@ -504,12 +596,26 @@ def _assign_hierarchical(
     sub_fallback_title = (cause or ev.title) if parent_chosen is not None else ev.title
 
     sub_chosen = None
+    sub_diag: dict = {}
+    dedup_sub_chosen = None
     if SUBTOPIC_MODE == "embedding":
         # 서브토픽은 이벤트 임베딩 최근접(greedy-max)으로 결정 — LLM 배정 판단 없음.
         sub_action, sub_decision, sub_chosen = _assign_subtopic_by_embedding(
             conn, ev, parent_chosen.topic_id if parent_chosen else None,
             cause if parent_chosen is not None else "",
         )
+        # 이 경로는 후보 목록이 비는 게 정상이다(cause 검색을 아예 건너뜀). 거리 임계값·
+        # 프롬프트 절삭 레버가 적용되지 않는다는 사실 자체가 진단에 필요하므로 남긴다.
+        sub_diag = {
+            "llm_decision": {
+                "action": sub_action,
+                "topic_id": sub_chosen.topic_id if sub_chosen else None,
+                "score": _load_decision_score(sub_decision),
+                "reason": str(sub_decision.get("reason") or ""),
+            },
+            "overridden": False,
+            "decided_by": "embedding",
+        }
     else:
         sub_action, sub_decision = _resolve_action(
             client,
@@ -526,6 +632,7 @@ def _assign_hierarchical(
             fallback_title=sub_fallback_title,
             # 서브토픽은 과병합 방지를 위해 부모보다 높은 문턱을 쓸 수 있다.
             score_threshold=SUBTOPIC_ASSIGN_SCORE_THRESHOLD,
+            diag=sub_diag,
         )
         if sub_action == "assign":
             sub_chosen = _select_candidate(sub_decision, sub_candidates)
@@ -625,6 +732,32 @@ def _assign_hierarchical(
         # events.topic_id는 leaf(서브토픽)만 참조하고, 체인도 leaf 단위로 연결한다.
         events.assign_topic(conn, ev.id, sub_id, sub_decision.get("reason"))
         _link_chain(conn, sub_id, ev.id)
+
+    # 계층 모드는 이벤트 1건당 결정이 둘(부모/서브)이므로 로그도 둘로 나눠 남긴다.
+    _emit_decision_log(
+        event_id=ev.id,
+        level="parent",
+        cause=cause,
+        candidates=parent_candidates,
+        llm_decision=parent_diag.get("llm_decision", {}),
+        overridden=parent_diag.get("overridden", False),
+        dedup_merged=parent_dedup_chosen is not None,
+        decided_by=parent_diag.get("decided_by", "llm"),
+        final_action=parent_action,
+        final_topic_id=parent_id,
+    )
+    _emit_decision_log(
+        event_id=ev.id,
+        level="subtopic",
+        cause=cause,
+        candidates=sub_candidates,
+        llm_decision=sub_diag.get("llm_decision", {}),
+        overridden=sub_diag.get("overridden", False),
+        dedup_merged=dedup_sub_chosen is not None,
+        decided_by=sub_diag.get("decided_by", "llm"),
+        final_action=sub_action,
+        final_topic_id=sub_id,
+    )
 
     parent_label = "create" if parent_action == "create" else f"assign {parent_id}"
     sub_label = "create" if sub_action == "create" else f"assign {sub_id}"

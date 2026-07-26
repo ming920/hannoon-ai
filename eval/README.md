@@ -324,6 +324,21 @@ python eval/constraint_checks.py `
 맞출 수는 없고, 그 기준으로는 게이트가 첫날부터 영구 실패해 무용지물이 된다. 실행 간 변동이
 관측되면 `--tolerance 0.02`처럼 허용 하락폭을 준다.
 
+### 반복 실험 시 초기화는 `reset_classifier_only.py`
+
+`reset_test_db.py`는 `article_ai_results`를 **통째로 삭제**한다. 합성 더미를 매번 새로 만드는
+루프에서는 맞지만, 실제 기사 2,578건으로 제약 검사를 반복할 때 쓰면 기사 요약(수집기 단계가
+LLM으로 만든 비싼 산출물)까지 날아가 매 반복 재생성해야 한다.
+
+```powershell
+EVAL_ALLOW_DESTRUCTIVE_RESET=1 `
+  python eval/reset_classifier_only.py --database-url "postgresql://localhost/..." --yes
+```
+
+분류기 출력(`event_articles`/`events`/`topic_causes`/`topics`)만 지우고
+`article_ai_results.status`를 `'done'`으로 되돌린다. 행과 요약은 그대로 남는다.
+안전 가드는 `reset_test_db.py`와 동일한 3중이다.
+
 비교 대상 `snapshot.json`을 뽑는 추출 SQL과 입력 형식은 `data/constraints/README.md`에,
 원천 기사 시딩 절차는 `data/seed/README.md`에 있다.
 
@@ -342,10 +357,12 @@ python eval/constraint_checks.py `
 ```powershell
 # 1) 분류기 로그를 파일로 받는다 (stdout이 JSONL)
 python classify_events.py --database-url "postgresql://..." > events.log
+python classify_topics.py --database-url "postgresql://..." > topics.log
 
 # 2) 정답 + 스냅샷 + 로그를 대조한다
 python eval/diagnose_violations.py `
-    eval/data/constraints/review_2026-07-20.json snapshot.json events.log
+    eval/data/constraints/review_2026-07-20.json snapshot.json events.log `
+    --topic-log topics.log
 ```
 
 **B 유형은 이 도구 없이는 찾을 수 없다.** `EVENT_CANDIDATE_LIMIT`(기본 12)이
@@ -357,7 +374,29 @@ python eval/diagnose_violations.py `
 단 임계값 변경은 이벤트 구성 자체를 바꿔 이후 후보 목록에 연쇄하므로 **1차 근사**이고,
 최종 확인은 재실행으로 해야 한다.
 
-이벤트 제약만 진단한다. 토픽 분류기는 아직 같은 진단 필드를 로그에 남기지 않는다.
+#### 토픽 위반은 먼저 "이벤트 탓인지"부터 가른다
+
+`--topic-log`를 주면 토픽 제약도 진단한다. 여기서 첫 갈래가 가장 중요하다.
+
+**같은 이벤트에 속한 기사는 토픽도 반드시 같다**(`events.topic_id`가 하나뿐이므로).
+따라서 토픽 must-link 위반은 두 기사가 **다른 이벤트에 갔다**는 뜻이고, 그 분리 자체가
+정답에 어긋난다면(이벤트 must-link도 위반) **토픽 레버로는 절대 고쳐지지 않는다.**
+
+| 원인 | 의미 | 처방 |
+|---|---|---|
+| **0** | 이벤트 분류 실패의 전파 | 토픽 말고 이벤트를 먼저 고친다 |
+| **1** | 부모는 같은데 서브토픽에서 갈림 | `SUBTOPIC_ASSIGN_SCORE_THRESHOLD` 또는 `TOPIC_SUBTOPIC_SIM_THRESHOLD` |
+| **A** | 부모 후보 검색에 없음 | `TOPIC_DISTANCE_THRESHOLD` 상향 |
+| **B** | 프롬프트에서 절삭 | `MAX_CANDIDATES`(topic_classifier/prompts.py) 상향 |
+| **C** | LLM이 다른 토픽으로 판단 | `build_parent_topic_assignment_prompt` 수정 |
+| **D** | 가드레일이 뒤집음 | `TOPIC_ASSIGN_SCORE_THRESHOLD` 하향 |
+
+1번(서브토픽 분할)은 `decided_by`를 함께 보여준다. `SUBTOPIC_MODE=embedding`이면 LLM
+배정 판단이 아예 없으므로 프롬프트·점수 레버가 적용되지 않고 유사도 임계값만 유효하다.
+
+> ⚠️ 정답의 **토픽 cannot-link 제약은 0쌍**이다. 모든 기사를 한 토픽에 몰아넣어도
+> 충족률은 만점으로 나온다. 토픽 과병합은 이 정답으로 감지할 수 없으니 `rubric_checks.py`의
+> R-T1(중복 토픽)과 토픽 개수를 반드시 함께 보라.
 
 ---
 
@@ -392,7 +431,8 @@ eval/
     <run-id>.md              # 실행별 상세 리포트
   generate_dummy.py          # taxonomy → (LLM 또는 --dry-run) → dummy + gold
   ingest_dummy.py            # 더미 기사 DB 주입 (guid 중복 검사로 멱등)
-  reset_test_db.py           # 분류기 출력 초기화 (3중 안전 가드)
+  reset_test_db.py           # 분류기 출력 + 더미 기사 초기화 (합성 루프용, 3중 안전 가드)
+  reset_classifier_only.py   # 분류기 출력만 초기화 — 기사 요약 보존 (실제 코퍼스 반복용)
   metrics.py                 # 레벨별 지표 계산 (순수 함수)
   evaluate.py                # DB 예측 읽기 + gold 비교 → 리포트 + CSV 행 추가
   rubric_checks.py           # 엔티티 정의 루브릭 위반 산출 (DB 스냅샷)
