@@ -36,10 +36,8 @@
 from __future__ import annotations
 
 import argparse
-import csv
 import json
 import os
-import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -51,8 +49,14 @@ sys.path.insert(0, str(_EVAL_DIR))
 
 from collector.storage import ensure_db  # noqa: E402
 
+import harness_common  # noqa: E402
 import rubric_checks  # noqa: E402
 from constraint_checks import evaluate_pairs  # noqa: E402
+from harness_common import coerce as _coerce  # noqa: E402
+from harness_common import fmt as _fmt  # noqa: E402
+from harness_common import patch_dotenv as _patch_dotenv  # noqa: E402
+from harness_common import read_previous_run  # noqa: E402
+from harness_common import read_settings as _read_settings  # noqa: E402
 from constraint_checks import (  # noqa: E402
     build_event_cluster_map,
     build_topic_cluster_map,
@@ -135,11 +139,7 @@ def count_unassigned_events(conn, min_net: int) -> int:
 
 
 def drain_topics(cmd: list, env: dict, db_url: str, min_net: int, log_path: Path) -> dict:
-    """미배정 이벤트가 없어질 때까지 토픽 분류기를 반복 호출하고 stdout을 파일에 모은다.
-
-    한 패스에서 잔량이 줄지 않으면(영구 실패 이벤트가 있을 가능성) 중단한다.
-    반환: {"passes", "remaining", "stuck"}
-    """
+    """미배정 이벤트가 없어질 때까지 토픽 분류기를 반복 호출하고 stdout을 파일에 모은다."""
     def _remaining() -> int:
         conn = ensure_db("", database_url=db_url)
         try:
@@ -147,41 +147,10 @@ def drain_topics(cmd: list, env: dict, db_url: str, min_net: int, log_path: Path
         finally:
             conn.close()
 
-    remaining = _remaining()
-    hard_cap = max(50, remaining * 2)
-    print(f"[토픽 드레인] 미배정 이벤트 {remaining}건 (article_count >= {min_net}), "
-          f"최대 {hard_cap}패스")
-
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    with log_path.open("w", encoding="utf-8") as log:
-        for pass_num in range(1, hard_cap + 1):
-            if remaining == 0:
-                print(f"[토픽 드레인] 완료 ({pass_num - 1}패스)")
-                return {"passes": pass_num - 1, "remaining": 0, "stuck": False}
-
-            result = subprocess.run(
-                cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
-            )
-            if result.stdout:
-                log.write(result.stdout)
-            if result.returncode != 0:
-                if result.stderr:
-                    print(result.stderr, file=sys.stderr)
-                raise RuntimeError(
-                    f"토픽 분류기가 패스 {pass_num}에서 종료 코드 {result.returncode}로 실패"
-                )
-
-            prev, remaining = remaining, _remaining()
-            print(f"[토픽 드레인] 패스 {pass_num}: {prev} → {remaining}건")
-            if remaining >= prev:
-                print(
-                    f"경고: 패스 {pass_num}에서 잔량이 줄지 않았습니다 ({prev} → {remaining}). "
-                    "영구 실패 이벤트가 있을 수 있어 중단합니다.",
-                    file=sys.stderr,
-                )
-                return {"passes": pass_num, "remaining": remaining, "stuck": True}
-
-    return {"passes": hard_cap, "remaining": remaining, "stuck": True}
+    return harness_common.drain(
+        cmd=cmd, env=env, remaining_fn=_remaining,
+        label=f"토픽 드레인 (article_count >= {min_net})", log_path=log_path,
+    )
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -293,44 +262,11 @@ def detect_warnings(current: dict, previous: dict | None) -> list[str]:
 
 
 def compare_runs(current: dict, previous: dict | None) -> list[dict]:
-    """직전 실행 대비 변화를 열별로 계산한다."""
-    if not previous:
-        return []
-    rows = []
-    for column in CSV_COLUMNS:
-        if column in ("run_id", "config_tag", "timestamp"):
-            continue
-        cur, prev = current.get(column), _coerce(previous.get(column))
-        if not isinstance(cur, (int, float)) or not isinstance(prev, (int, float)):
-            continue
-        delta = cur - prev
-        if delta == 0:
-            verdict = "유지"
-        elif column in _HIGHER_IS_BETTER:
-            verdict = "개선" if delta > 0 else "악화"
-        elif column in _LOWER_IS_BETTER:
-            verdict = "개선" if delta < 0 else "악화"
-        else:
-            verdict = "변동"
-        rows.append({"column": column, "previous": prev, "current": cur,
-                     "delta": delta, "verdict": verdict})
-    return rows
-
-
-def _coerce(value):
-    """CSV에서 읽은 문자열을 숫자로 되돌린다 (빈 값/None은 그대로)."""
-    if value is None or value == "":
-        return None
-    if isinstance(value, (int, float)):
-        return value
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        pass
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return value
+    """직전 실행 대비 변화를 열별로 계산한다 (토픽 하네스의 열 정의를 적용)."""
+    return harness_common.compare_runs(
+        current, previous, columns=CSV_COLUMNS,
+        higher_is_better=_HIGHER_IS_BETTER, lower_is_better=_LOWER_IS_BETTER,
+    )
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -340,30 +276,7 @@ def _coerce(value):
 
 def append_csv(path: Path, row: dict) -> None:
     """실행 결과를 CSV에 한 줄 덧붙인다 (헤더는 최초 1회)."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    is_new = not path.exists() or path.stat().st_size == 0
-    with path.open("a", encoding="utf-8", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=CSV_COLUMNS, extrasaction="ignore")
-        if is_new:
-            writer.writeheader()
-        writer.writerow({k: ("" if row.get(k) is None else row.get(k)) for k in CSV_COLUMNS})
-
-
-def read_previous_run(path: Path, exclude_run_id: str) -> dict | None:
-    """CSV에서 가장 최근 실행(현재 run-id 제외)을 읽는다."""
-    if not path.exists():
-        return None
-    with path.open(encoding="utf-8", newline="") as f:
-        rows = [r for r in csv.DictReader(f) if r.get("run_id") != exclude_run_id]
-    return rows[-1] if rows else None
-
-
-def _fmt(value) -> str:
-    if value is None or value == "":
-        return "N/A"
-    if isinstance(value, float):
-        return f"{value * 100:.1f}%" if 0 <= value <= 1 else f"{value:.4f}"
-    return str(value)
+    harness_common.append_csv(path, CSV_COLUMNS, row)
 
 
 def format_report(metrics: dict, diagnosis: dict, comparison: list, warnings: list) -> str:
@@ -433,43 +346,6 @@ def format_report(metrics: dict, diagnosis: dict, comparison: list, warnings: li
 # ══════════════════════════════════════════════════════════════════════════
 # 실행
 # ══════════════════════════════════════════════════════════════════════════
-
-
-def _patch_dotenv(path: Path, overrides: list[str]) -> str:
-    """.env 에 KEY=VALUE 를 적용하고 원본 텍스트를 반환한다 (복원용).
-
-    분류기가 load_dotenv(override=True) 를 쓰므로 프로세스 환경변수 주입은 무시된다.
-    .env 파일 자체를 고치는 것이 유일하게 동작하는 방법이다.
-    """
-    original = path.read_text(encoding="utf-8")
-    lines = original.splitlines(keepends=True)
-    for kv in overrides:
-        key, value = kv.split("=", 1)
-        prefix = f"{key}="
-        for i, line in enumerate(lines):
-            if line.startswith(prefix):
-                lines[i] = f"{key}={value}\n"
-                break
-        else:
-            if lines and not lines[-1].endswith("\n"):
-                lines[-1] += "\n"
-            lines.append(f"{key}={value}\n")
-    path.write_text("".join(lines), encoding="utf-8")
-    return original
-
-
-def _read_settings(dotenv_path: Path) -> dict:
-    """분류기 서브프로세스가 실제로 읽게 될 .env 값을 그대로 읽는다."""
-    settings = {}
-    if not dotenv_path.exists():
-        return settings
-    for line in dotenv_path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        settings[key.strip()] = value.strip()
-    return settings
 
 
 def main() -> None:
