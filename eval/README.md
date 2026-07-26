@@ -366,6 +366,50 @@ python eval/topic_harness.py --run-id t-001-rescore --skip-classify
 위반이 전부 `이벤트 분류 실패의 전파`로 나오면 그것도 경고한다 — 그 경우 토픽 레버를
 아무리 만져도 개선되지 않으므로 이벤트 분류를 먼저 고쳐야 한다.
 
+### 이벤트 하네스 — `event_harness.py`
+
+같은 뼈대로 이벤트 레이어를 잰다. 초기화가 기사 요약은 보존하되 **토픽까지 지운다** —
+이벤트 구성이 바뀌면 그 위의 토픽도 다시 만들어야 하기 때문이다. 토픽 지표가 필요하면
+이 하네스를 돌린 뒤 `topic_harness.py`를 이어서 돌린다.
+
+```powershell
+python eval/event_harness.py --database-url "postgresql://localhost/..." `
+    --run-id e-000 --config-tag baseline
+```
+
+이벤트는 실패가 **양방향**이라 경고가 더 중요하다. 모두 병합하면 must-link 100%,
+모두 쪼개면 cannot-link 100%가 나온다. 그래서 ⑴ 단일기사 이벤트 70% 초과 ⑵ 충족률 상승 +
+이벤트 수 20% 이상 감소 ⑶ must-link 상승 + cannot-link 하락 세 가지를 경고한다.
+
+### 여러 설정을 한 번에 — `sweep.py`
+
+개선은 설정 여럿을 비교해야 한다. 스윕은 그 반복을 무인으로 돌린다.
+
+```powershell
+# 먼저 계획만 확인 (비용이 설정 수만큼 곱해지므로 권장)
+python eval/sweep.py --harness topic --run-prefix s1 `
+    --config "baseline:" `
+    --config "assign070:TOPIC_ASSIGN_SCORE_THRESHOLD=0.70" `
+    --config "combo:TOPIC_DISTANCE_THRESHOLD=0.60,TOPIC_ASSIGN_SCORE_THRESHOLD=0.85" `
+    --dry-run
+
+# 실제 실행 (--dry-run 만 빼고 --database-url 추가)
+```
+
+끝나면 이번 스윕의 실행들만 골라 비교표를 출력한다.
+
+```
+  config_tag  topic_must_rate  topics_total
+  -----------------------------------------
+  기준선      0.42             120
+  assign070   0.55             98
+  거리완화    0.51             134
+```
+
+**충족률만 보고 고르면 안 된다.** 위 예에서 `assign070`이 충족률은 가장 높지만 토픽 수가
+120 → 98로 줄었다 — 과병합으로 점수를 샀을 수 있다. 각 실행의 `.md` 리포트에 경고가
+찍혔는지 반드시 확인하라.
+
 ### 반복 실험 시 초기화는 `reset_classifier_only.py`
 
 `reset_test_db.py`는 `article_ai_results`를 **통째로 삭제**한다. 합성 더미를 매번 새로 만드는
@@ -478,7 +522,10 @@ eval/
   metrics.py                 # 레벨별 지표 계산 (순수 함수)
   evaluate.py                # DB 예측 읽기 + gold 비교 → 리포트 + CSV 행 추가
   extract_snapshot.py        # 분류 결과 DB → 제약 검사 입력 JSON (읽기 전용)
+  harness_common.py          # 두 하네스 공통 배관 (CSV 누적·비교·드레인·.env 패치)
   topic_harness.py           # 토픽 반복 검증·개선 하네스 (초기화→분류→채점→진단→누적)
+  event_harness.py           # 이벤트 반복 검증·개선 하네스 (요약 보존, 토픽까지 초기화)
+  sweep.py                   # 여러 설정을 연속 실행하고 한 표로 비교
   rubric_checks.py           # 엔티티 정의 루브릭 위반 산출 (DB 스냅샷)
   constraint_checks.py       # 사람 검수 제약 충족률 + 기준선 회귀 게이트 (JSON 입력, DB 불필요)
   diagnose_violations.py     # 위반 원인을 분류기 로그와 대조해 A/B/C/D로 진단 + 처방 시뮬레이션
