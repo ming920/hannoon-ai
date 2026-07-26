@@ -419,8 +419,11 @@ def main() -> None:
 
     print(f"\n  리포트: {report_path}")
     print(f"  누적  : {csv_path}")
-    print("  ※ 이벤트 재분류로 토픽 레이어가 비었습니다. 토픽 지표가 필요하면 "
-          "topic_harness.py 를 이어서 돌리세요.")
+    if not args.skip_classify:
+        # 초기화를 한 경우에만 해당한다. --skip-classify 는 DB를 건드리지 않으므로
+        # 토픽 레이어가 그대로 남아 있고, 이 안내는 사실과 다르다.
+        print("  ※ 이벤트 재분류로 토픽 레이어가 비었습니다. 토픽 지표가 필요하면 "
+              "topic_harness.py 를 이어서 돌리세요.")
     print("═" * 64)
 
 
