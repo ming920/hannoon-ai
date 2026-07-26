@@ -324,6 +324,48 @@ python eval/constraint_checks.py `
 맞출 수는 없고, 그 기준으로는 게이트가 첫날부터 영구 실패해 무용지물이 된다. 실행 간 변동이
 관측되면 `--tolerance 0.02`처럼 허용 하락폭을 준다.
 
+### 토픽 반복 하네스 — `topic_harness.py`
+
+위 단계를 하나로 묶어 반복 실행하고 결과를 누적한다. 토픽 분류를 개선할 때는 이걸 쓴다.
+
+```powershell
+# 1회차 — 기준선
+python eval/topic_harness.py --database-url "postgresql://localhost/..." `
+    --run-id t-000 --config-tag baseline
+
+# 2회차 — 파라미터를 바꿔 재실행 (직전 실행과 자동 비교)
+python eval/topic_harness.py --database-url "postgresql://localhost/..." `
+    --run-id t-001 --config-tag "assign 0.70" `
+    --set TOPIC_ASSIGN_SCORE_THRESHOLD=0.70
+
+# 분류 없이 채점만 다시
+python eval/topic_harness.py --run-id t-001-rescore --skip-classify
+```
+
+한 번 실행하면 **토픽 레이어만 초기화**(이벤트 보존) → `classify_topics` 드레인(stdout을
+진단 로그로 캡처) → 스냅샷 추출 → 충족률 → 원인 진단 → 루브릭 교차 확인 →
+`results/topic_runs.csv` 한 줄 누적 + `results/topic-<run-id>.md` 리포트까지 간다.
+
+**이벤트를 보존하는 게 핵심이다.** 이벤트 레이어를 고정해야 충족률 변화가 토픽 레버의
+효과라고 말할 수 있고, 이벤트 재분류 API 비용도 들지 않는다.
+
+`--set`은 `.env`를 임시 패치했다가 실행 후 복원한다. 분류기가
+`load_dotenv(override=True)`를 쓰므로 셸 `export`는 무시된다 — 이게 유일하게 듣는 방법이다.
+
+#### 충족률만 보면 반드시 속는다
+
+정답의 토픽 cannot-link 제약은 **0쌍**이다. 모든 이벤트를 한 토픽에 몰아넣어도 must-link
+충족률은 100%가 나온다. 그래서 하네스는 리포트에 **토픽 개수와 R-T1(중복 토픽)을 충족률
+바로 옆에** 싣고, 충족률이 올랐는데 토픽 수가 20% 넘게 줄면 경고한다.
+
+```
+⚠️ 충족률이 올랐지만 토픽 수가 100 → 60로 20% 넘게 줄었습니다.
+   과병합으로 점수를 샀을 가능성이 높습니다.
+```
+
+위반이 전부 `이벤트 분류 실패의 전파`로 나오면 그것도 경고한다 — 그 경우 토픽 레버를
+아무리 만져도 개선되지 않으므로 이벤트 분류를 먼저 고쳐야 한다.
+
 ### 반복 실험 시 초기화는 `reset_classifier_only.py`
 
 `reset_test_db.py`는 `article_ai_results`를 **통째로 삭제**한다. 합성 더미를 매번 새로 만드는
@@ -435,6 +477,8 @@ eval/
   reset_classifier_only.py   # 분류기 출력만 초기화 — 기사 요약 보존 (실제 코퍼스 반복용)
   metrics.py                 # 레벨별 지표 계산 (순수 함수)
   evaluate.py                # DB 예측 읽기 + gold 비교 → 리포트 + CSV 행 추가
+  extract_snapshot.py        # 분류 결과 DB → 제약 검사 입력 JSON (읽기 전용)
+  topic_harness.py           # 토픽 반복 검증·개선 하네스 (초기화→분류→채점→진단→누적)
   rubric_checks.py           # 엔티티 정의 루브릭 위반 산출 (DB 스냅샷)
   constraint_checks.py       # 사람 검수 제약 충족률 + 기준선 회귀 게이트 (JSON 입력, DB 불필요)
   diagnose_violations.py     # 위반 원인을 분류기 로그와 대조해 A/B/C/D로 진단 + 처방 시뮬레이션
