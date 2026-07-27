@@ -69,6 +69,7 @@ RUNS_CSV = "event_runs.csv"
 
 CSV_COLUMNS = [
     "run_id", "config_tag", "timestamp",
+    "gold_fingerprint",
     "event_must_rate", "event_cannot_rate",
     "event_must_pairs", "event_cannot_pairs",
     "events_total", "articles_assigned", "single_article_events",
@@ -174,6 +175,8 @@ def collect_metrics(
         "run_id": run_id,
         "config_tag": config_tag,
         "timestamp": timestamp,
+        # 정답이 바뀌면 분류기가 그대로여도 충족률이 움직인다 — 비교 가능 여부를 남긴다.
+        "gold_fingerprint": harness_common.gold_fingerprint(gold),
         "event_must_rate": must_rate,
         "event_cannot_rate": cannot_rate,
         # 충족률과 함께 기록해 두지 않으면 나중에 CSV만 보고는 표본 크기를 알 수 없다.
@@ -203,6 +206,7 @@ def collect_metrics(
 def detect_warnings(current: dict, previous: dict | None) -> list[str]:
     """충족률 숫자만으로는 놓치는 실패 양상을 잡아낸다."""
     warnings = []
+    warnings.extend(harness_common.gold_change_warning(current, previous))
 
     if current["events_total"] == 0:
         warnings.append("이벤트가 0개입니다 — 분류가 실행되지 않았을 수 있습니다.")
@@ -473,12 +477,17 @@ def main() -> None:
           + (f" / ? {nolog} (진단 불가)" if nolog else ""))
 
     if comparison:
-        print(f"\n  직전 실행({previous.get('run_id')}) 대비:")
+        # 정답이 바뀌었으면 개선/악화 판정 자체가 성립하지 않는다. 경고만 덧붙이면
+        # 초록색 "개선" 딱지가 먼저 눈에 들어와 경고를 이긴다.
+        comparable = not harness_common.gold_change_warning(metrics, previous)
+        suffix = "" if comparable else "  (채점 기준이 달라 비교 불가)"
+        print(f"\n  직전 실행({previous.get('run_id')}) 대비:{suffix}")
         for row in comparison:
             if row["verdict"] == "유지":
                 continue
+            verdict = row["verdict"] if comparable else "—"
             print(f"    {row['column']:<22} {_fmt(row['previous'])} → "
-                  f"{_fmt(row['current'])}  {row['verdict']}")
+                  f"{_fmt(row['current'])}  {verdict}")
     else:
         print("\n  (비교할 직전 실행이 없습니다 — 이번이 기준선입니다)")
 

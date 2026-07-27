@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import subprocess
 import sys
 from pathlib import Path
@@ -42,6 +43,40 @@ def fmt(value) -> str:
     if isinstance(value, float):
         return f"{value * 100:.1f}%" if 0 <= value <= 1 else f"{value:.4f}"
     return str(value)
+
+
+def gold_fingerprint(gold: dict) -> str:
+    """채점 기준(정답 쌍 집합)의 짧은 지문.
+
+    정답이 바뀌면 충족률은 분류기가 한 줄도 안 바뀌어도 움직인다. 검수 라운드를 돌 때마다
+    정답이 늘어나므로 이 일은 반드시 일어난다 — 실제로 검수 1라운드를 반영하자 같은 스냅샷의
+    must-link 가 84.0% → 88.4% 로 "올랐다". 자가 바뀐 것뿐인데 개선으로 읽힌다.
+
+    실행마다 기록해 두고, 지문이 다른 실행끼리는 비교하지 않도록 경고한다.
+    """
+    parts = []
+    for unit in ("event_constraints", "topic_constraints"):
+        block = (gold or {}).get(unit) or {}
+        for key in ("must_link", "cannot_link"):
+            pairs = sorted(tuple(sorted(p)) for p in block.get(key) or [] if len(p) >= 2)
+            digest = hashlib.sha1(repr(pairs).encode("utf-8")).hexdigest()
+            parts.append(f"{unit}.{key}:{len(pairs)}:{digest}")
+    return hashlib.sha1("|".join(parts).encode("utf-8")).hexdigest()[:12]
+
+
+def gold_change_warning(current: dict, previous: dict | None) -> list[str]:
+    """직전 실행과 채점 기준이 다르면 비교하지 말라고 알린다."""
+    if not previous:
+        return []
+    cur = current.get("gold_fingerprint")
+    prev = previous.get("gold_fingerprint")
+    if not cur or not prev or cur == prev:
+        return []
+    return [
+        f"직전 실행과 **채점 기준(정답)이 다릅니다** ({prev} → {cur}). 충족률 변화는 분류기 "
+        "개선이 아니라 자가 바뀐 결과일 수 있습니다 — 같은 정답으로 채점한 실행끼리만 "
+        "비교하세요."
+    ]
 
 
 def migrate_csv_header(path: Path, columns: list[str]) -> bool:

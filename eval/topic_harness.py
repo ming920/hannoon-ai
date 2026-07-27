@@ -83,6 +83,7 @@ RUNS_CSV = "topic_runs.csv"
 # 실행 간 비교에 쓰는 열. 순서를 바꾸면 기존 CSV와 어긋나므로 뒤에만 추가할 것.
 CSV_COLUMNS = [
     "run_id", "config_tag", "timestamp",
+    "gold_fingerprint",
     "topic_must_rate", "topic_cannot_rate",
     "topic_must_pairs", "topic_cannot_pairs",
     "event_must_rate", "event_cannot_rate",
@@ -246,6 +247,8 @@ def collect_metrics(
         "run_id": run_id,
         "config_tag": config_tag,
         "timestamp": timestamp,
+        # 정답이 바뀌면 분류기가 그대로여도 충족률이 움직인다 — 비교 가능 여부를 남긴다.
+        "gold_fingerprint": harness_common.gold_fingerprint(gold),
         "topic_must_rate": topic_must_rate,
         "topic_cannot_rate": topic_cannot_rate,
         "topic_must_pairs": topic_must_pairs,
@@ -280,6 +283,7 @@ def collect_metrics(
 def detect_warnings(current: dict, previous: dict | None) -> list[str]:
     """숫자만으로는 놓치기 쉬운 실패 양상을 잡아낸다."""
     warnings = []
+    warnings.extend(harness_common.gold_change_warning(current, previous))
 
     if current["topics_total"] == 0:
         warnings.append("토픽이 0개입니다 — 분류가 실행되지 않았을 수 있습니다.")
@@ -549,12 +553,17 @@ def main() -> None:
           + (f" / ? {t_nolog} (진단 불가)" if t_nolog else ""))
 
     if comparison:
-        print(f"\n  직전 실행({previous.get('run_id')}) 대비:")
+        # 정답이 바뀌었으면 개선/악화 판정 자체가 성립하지 않는다. 경고만 덧붙이면
+        # 초록색 "개선" 딱지가 먼저 눈에 들어와 경고를 이긴다.
+        comparable = not harness_common.gold_change_warning(metrics, previous)
+        suffix = "" if comparable else "  (채점 기준이 달라 비교 불가)"
+        print(f"\n  직전 실행({previous.get('run_id')}) 대비:{suffix}")
         for row in comparison:
             if row["verdict"] == "유지":
                 continue
+            verdict = row["verdict"] if comparable else "—"
             print(f"    {row['column']:<22} {_fmt(row['previous'])} → "
-                  f"{_fmt(row['current'])}  {row['verdict']}")
+                  f"{_fmt(row['current'])}  {verdict}")
     else:
         print("\n  (비교할 직전 실행이 없습니다 — 이번이 기준선입니다)")
 

@@ -28,6 +28,8 @@ from harness_common import (  # noqa: E402
     append_csv,
     compare_runs,
     drain,
+    gold_change_warning,
+    gold_fingerprint,
     migrate_csv_header,
     read_previous_run,
     sample_size_warnings,
@@ -221,6 +223,62 @@ class DrainStderrTests(unittest.TestCase):
         text = self.errlog.read_text(encoding="utf-8")
         self.assertIn("앞선 패스 실패", text)
         self.assertIn("이번 패스 실패", text)
+
+
+class GoldFingerprintTests(unittest.TestCase):
+    """정답이 바뀐 실행끼리 비교하면 '자가 바뀐 것'을 '개선'으로 읽는다.
+
+    검수 라운드를 돌 때마다 정답은 늘어나므로 이 일은 반드시 일어난다. 실제로 검수 1라운드를
+    반영하자 **같은 스냅샷**의 must-link 가 84.0% → 88.4% 로 올랐고, 하네스는 그것을 분류기
+    변화인 것처럼 트레이드오프 경고까지 붙였다.
+    """
+
+    def _gold(self, must, cannot=()):
+        return {"event_constraints": {"must_link": list(must),
+                                      "cannot_link": list(cannot)}}
+
+    def test_same_constraints_same_fingerprint(self):
+        self.assertEqual(gold_fingerprint(self._gold([[1, 2]])),
+                         gold_fingerprint(self._gold([[1, 2]])))
+
+    def test_pair_order_does_not_matter(self):
+        self.assertEqual(gold_fingerprint(self._gold([[1, 2]])),
+                         gold_fingerprint(self._gold([[2, 1]])))
+
+    def test_listing_order_does_not_matter(self):
+        self.assertEqual(gold_fingerprint(self._gold([[1, 2], [3, 4]])),
+                         gold_fingerprint(self._gold([[3, 4], [1, 2]])))
+
+    def test_added_pair_changes_fingerprint(self):
+        self.assertNotEqual(gold_fingerprint(self._gold([[1, 2]])),
+                            gold_fingerprint(self._gold([[1, 2], [3, 4]])))
+
+    def test_moving_a_pair_between_must_and_cannot_changes_it(self):
+        self.assertNotEqual(gold_fingerprint(self._gold([[1, 2]], [])),
+                            gold_fingerprint(self._gold([], [[1, 2]])))
+
+    def test_empty_gold_is_stable(self):
+        self.assertEqual(gold_fingerprint({}), gold_fingerprint({}))
+
+
+class GoldChangeWarningTests(unittest.TestCase):
+    def test_warns_when_fingerprint_differs(self):
+        (msg,) = gold_change_warning({"gold_fingerprint": "bbb"},
+                                     {"gold_fingerprint": "aaa"})
+        self.assertIn("채점 기준", msg)
+        self.assertIn("aaa", msg)
+        self.assertIn("bbb", msg)
+
+    def test_silent_when_same(self):
+        self.assertEqual(
+            gold_change_warning({"gold_fingerprint": "a"}, {"gold_fingerprint": "a"}), [])
+
+    def test_silent_without_previous_run(self):
+        self.assertEqual(gold_change_warning({"gold_fingerprint": "a"}, None), [])
+
+    def test_silent_when_previous_predates_the_column(self):
+        # 열이 생기기 전 실행에는 지문이 없다 — 없는 것을 변경으로 오인하면 안 된다.
+        self.assertEqual(gold_change_warning({"gold_fingerprint": "a"}, {}), [])
 
 
 class CsvHeaderMigrationTests(unittest.TestCase):
