@@ -76,6 +76,7 @@ CSV_COLUMNS = [
     "c_a", "c_b", "c_c", "c_d", "c_nolog",
     "rubric_e1_ratio", "rubric_e2",
     "distance_threshold", "assign_score", "candidate_limit", "window_days", "batch_size",
+    "embedding_update",
 ]
 
 _HIGHER_IS_BETTER = {"event_must_rate", "event_cannot_rate"}
@@ -200,6 +201,9 @@ def collect_metrics(
         "candidate_limit": settings.get("EVENT_CANDIDATE_LIMIT", ""),
         "window_days": settings.get("EVENT_CANDIDATE_WINDOW_DAYS", ""),
         "batch_size": settings.get("EVENT_BATCH_SIZE", ""),
+        # 이 실행이 어떤 벡터 갱신 방식이었는지 남긴다 — 기록하지 않으면
+        # 나중에 두 실행을 나란히 놓고도 무엇이 달랐는지 알 수 없다.
+        "embedding_update": settings.get("EVENT_EMBEDDING_UPDATE", "anchor"),
     }
 
 
