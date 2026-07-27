@@ -10,6 +10,11 @@ logs/
 # eval 실행 산출물 (evaluate.py가 재생성 — 핵심 수치는 eval/README.md 요약 참조)
 eval/results/
 
+# 검수 대기열은 분류 결과에서 재생성되는 산출물이다(review_worklist.py build).
+# 채워진 결과는 eval/data/constraints/ 의 새 정답 파일로 합쳐 커밋한다.
+eval/data/review/worklist.json
+eval/data/review/worklist.md
+
 # 구 회귀 테스트 도구(han-noon_test.exe): Windows 전용 바이너리라 소스가 없고 macOS에서
 # 실행 불가. eval/constraint_checks.py가 대체하므로 커밋하지 않는다.
 # 데이터는 eval/data/constraints/ 와 eval/data/seed/ 로 이관됐다.
