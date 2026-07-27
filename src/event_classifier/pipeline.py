@@ -20,6 +20,8 @@ from event_classifier.settings import (
     BATCH_SIZE,
     CANDIDATE_WINDOW_DAYS,
     DISTANCE_THRESHOLD,
+    EMBEDDING_UPDATE_CENTROID,
+    EMBEDDING_UPDATE_MODE,
     LLM_MODEL,
     TOP_K,
 )
@@ -421,6 +423,9 @@ def process_event_classification(
                             reason,
                         )
                         events.update_event_summary(conn, event_id, event_summary)
+                        if EMBEDDING_UPDATE_MODE == EMBEDDING_UPDATE_CENTROID:
+                            # link 뒤에 호출해야 방금 붙은 기사가 중심에 반영된다.
+                            events.recenter_event_embedding(conn, event_id)
                         msg = f"assigned to event {event_id}"
                     else:
                         generated_title = str(
