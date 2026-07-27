@@ -7,6 +7,18 @@ MAX_CANDIDATES = 8
 MAX_CAUSES_PER_CANDIDATE = 5
 MAX_EVENTS_PER_TOPIC_SUMMARY = 12
 
+# JSON 예시에 구체적인 숫자를 박아두면 모델이 그 값을 그대로 베낀다. 로컬 시운전에서
+# 토픽 결정 36건 중 LLM이 매긴 32건이 전부 예시의 0.93/0.35 두 값이었다(이벤트 쪽은 680건
+# 전부). 그러면 ASSIGN_SCORE_THRESHOLD 가 발동할 수 없어 가드레일의 점수 축이 죽는다.
+SCORE_PLACEHOLDER = "<0.00~1.00>"
+
+_SCORE_GUIDE = f"""score 는 "이 이벤트가 그 후보 토픽에 속한다"는 확신도입니다.
+위 {SCORE_PLACEHOLDER} 는 형식 표시일 뿐이니 그대로 쓰지 말고, 매 건 근거에 따라 값을 매기세요.
+- 0.90 이상: 같은 사안의 전개임이 원인·결과에서 명확히 확인됨
+- 0.70~0.89: 같은 사안으로 보이나 근거가 부분적
+- 0.50~0.69: 관련은 있으나 같은 사안인지 불확실
+- 0.50 미만: 다른 사안"""
+
 
 def build_topic_cause_result_prompt(event_text: str) -> str:
     return f"""다음 뉴스 이벤트의 핵심 원인과 결과를 추출하세요.
@@ -43,8 +55,10 @@ def build_topic_assignment_prompt(
     return f"""다음 뉴스 이벤트가 기존 토픽 중 하나에 속하는지 판단하세요.
 
 아래 둘 중 하나의 JSON 객체만 반환하세요:
-- 기존 토픽에 배정: {{"action": "assign", "topic_id": 123, "score": 0.93, "reason": "짧은 한국어 이유"}}
-- 새 토픽 생성: {{"action": "create", "new_title": "30자 이내 한국어 토픽 제목", "score": 0.35, "reason": "짧은 한국어 이유"}}
+- 기존 토픽에 배정: {{"action": "assign", "topic_id": 123, "score": {SCORE_PLACEHOLDER}, "reason": "짧은 한국어 이유"}}
+- 새 토픽 생성: {{"action": "create", "new_title": "30자 이내 한국어 토픽 제목", "score": {SCORE_PLACEHOLDER}, "reason": "짧은 한국어 이유"}}
+
+{_SCORE_GUIDE}
 
 대상 이벤트:
 제목: {title}
@@ -102,8 +116,10 @@ def build_parent_topic_assignment_prompt(
     return f"""다음 뉴스 이벤트가 기존 상위(부모) 토픽 중 하나에 속하는지 판단하세요.
 
 아래 둘 중 하나의 JSON 객체만 반환하세요:
-- 기존 상위 토픽에 배정: {{"action": "assign", "topic_id": 123, "score": 0.93, "reason": "짧은 한국어 이유"}}
-- 새 상위 토픽 생성: {{"action": "create", "new_title": "30자 이내 한국어 상위 토픽 제목", "score": 0.35, "reason": "짧은 한국어 이유"}}
+- 기존 상위 토픽에 배정: {{"action": "assign", "topic_id": 123, "score": {SCORE_PLACEHOLDER}, "reason": "짧은 한국어 이유"}}
+- 새 상위 토픽 생성: {{"action": "create", "new_title": "30자 이내 한국어 상위 토픽 제목", "score": {SCORE_PLACEHOLDER}, "reason": "짧은 한국어 이유"}}
+
+{_SCORE_GUIDE}
 
 대상 이벤트:
 제목: {title}
@@ -159,8 +175,10 @@ def build_subtopic_assignment_prompt(
     return f"""다음 뉴스 이벤트가 상위 토픽 안에서 어떤 세부 갈래(서브토픽)에 속하는지 판단하세요.
 
 아래 둘 중 하나의 JSON 객체만 반환하세요:
-- 기존 서브토픽에 배정: {{"action": "assign", "topic_id": 123, "score": 0.93, "reason": "짧은 한국어 이유"}}
-- 새 서브토픽 생성: {{"action": "create", "new_title": "30자 이내 한국어 서브토픽 제목", "score": 0.35, "reason": "짧은 한국어 이유"}}
+- 기존 서브토픽에 배정: {{"action": "assign", "topic_id": 123, "score": {SCORE_PLACEHOLDER}, "reason": "짧은 한국어 이유"}}
+- 새 서브토픽 생성: {{"action": "create", "new_title": "30자 이내 한국어 서브토픽 제목", "score": {SCORE_PLACEHOLDER}, "reason": "짧은 한국어 이유"}}
+
+{_SCORE_GUIDE}
 
 상위 토픽(이미 이 이벤트가 속하기로 확정된 큰 주제):
 제목: {parent_title}

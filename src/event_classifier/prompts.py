@@ -35,6 +35,20 @@ def build_extract_main_event_prompt(article_text: str) -> str:
 """
 
 
+# JSON 예시에 구체적인 숫자를 박아두면 모델이 그 값을 그대로 베낀다. 로컬 시운전에서
+# 후보가 있었던 결정 680건이 **전부** 예시의 0.93/0.35 두 값만 반환했고(서로 다른 값 2개),
+# 그 결과 ASSIGN_SCORE_THRESHOLD 가 한 번도 발동하지 못했다 — 가드레일의 점수 축이 죽어 있었다.
+# 자리표시자와 구간 기준으로 바꿔 점수가 실제 신호를 담도록 한다.
+SCORE_PLACEHOLDER = "<0.00~1.00>"
+
+_SCORE_GUIDE = f"""score 는 "새 기사가 그 후보와 같은 구체적 이벤트"라는 확신도입니다.
+위 {SCORE_PLACEHOLDER} 는 형식 표시일 뿐이니 그대로 쓰지 말고, 매 건 근거에 따라 값을 매기세요.
+- 0.90 이상: 같은 행동·결정임이 양쪽 본문에 명시적으로 드러남
+- 0.70~0.89: 정황상 같은 사건이나 명시적 근거는 부족
+- 0.50~0.69: 관련은 있으나 같은 결정인지 불확실
+- 0.50 미만: 다른 사건"""
+
+
 def build_event_assignment_prompt(
     article_title: str,
     article_summary: str,
@@ -46,10 +60,12 @@ def build_event_assignment_prompt(
 
 아래 둘 중 하나의 JSON 객체만 반환하세요:
 - 기존 이벤트에 배정:
-{{"action": "assign", "event_id": 123, "score": 0.93, "reason": "짧은 한국어 이유"}}
+{{"action": "assign", "event_id": 123, "score": {SCORE_PLACEHOLDER}, "reason": "짧은 한국어 이유"}}
 
 - 새 이벤트 생성:
-{{"action": "create", "event_title": "간결한 한국어 이벤트 제목", "score": 0.35, "reason": "짧은 한국어 이유"}}
+{{"action": "create", "event_title": "간결한 한국어 이벤트 제목", "score": {SCORE_PLACEHOLDER}, "reason": "짧은 한국어 이유"}}
+
+{_SCORE_GUIDE}
 
 새 기사 제목:
 {article_title}
@@ -172,7 +188,9 @@ def build_verify_event_prompt(main_event: str, event_core_content: str) -> str:
     return f"""두 이벤트가 실질적으로 같은 구체적 이벤트인지 판단하세요.
 
 아래 JSON 객체만 반환하세요:
-{{"score": 0.93, "reason": "짧은 한국어 이유"}}
+{{"score": {SCORE_PLACEHOLDER}, "reason": "짧은 한국어 이유"}}
+
+{_SCORE_GUIDE}
 
 신규 기사 대표 이벤트:
 {main_event}
