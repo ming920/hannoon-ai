@@ -13,6 +13,7 @@ drain 과 compare_runs 의 파라미터화만 직접 검증한다.
 from __future__ import annotations
 
 import contextlib
+import csv
 import io
 import os
 import sys
@@ -22,7 +23,15 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "eval"))
 
-from harness_common import compare_runs, drain  # noqa: E402
+from harness_common import (  # noqa: E402
+    MIN_RELIABLE_PAIRS,
+    append_csv,
+    compare_runs,
+    drain,
+    migrate_csv_header,
+    read_previous_run,
+    sample_size_warnings,
+)
 
 
 def _echo_cmd(text: str) -> list:
@@ -212,6 +221,102 @@ class DrainStderrTests(unittest.TestCase):
         text = self.errlog.read_text(encoding="utf-8")
         self.assertIn("앞선 패스 실패", text)
         self.assertIn("이번 패스 실패", text)
+
+
+class CsvHeaderMigrationTests(unittest.TestCase):
+    """지표 열이 늘어날 때 과거 행이 조용히 어긋나지 않아야 한다.
+
+    헤더를 최초 1회만 쓰는 구조라, 열을 추가하면 새 행이 옛 헤더 아래에 다른 순서로 쌓인다.
+    그러면 추세 비교가 엉뚱한 열끼리 이뤄지는데 파일은 멀쩡해 보여서 알아채기 어렵다.
+    (실제로 event_must_pairs/event_cannot_pairs 를 추가하면서 이 경로에 걸렸다.)
+    """
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.csv = Path(self.dir.name) / "runs.csv"
+
+    def tearDown(self):
+        self.dir.cleanup()
+
+    def _read(self) -> tuple:
+        with self.csv.open(encoding="utf-8", newline="") as f:
+            reader = csv.DictReader(f)
+            return reader.fieldnames, list(reader)
+
+    def test_new_column_is_backfilled_blank(self):
+        append_csv(self.csv, ["run_id", "rate"], {"run_id": "a", "rate": 0.5})
+        append_csv(self.csv, ["run_id", "rate", "pairs"],
+                   {"run_id": "b", "rate": 0.6, "pairs": 100})
+        header, rows = self._read()
+        self.assertEqual(header, ["run_id", "rate", "pairs"])
+        self.assertEqual(rows[0], {"run_id": "a", "rate": "0.5", "pairs": ""})
+        self.assertEqual(rows[1], {"run_id": "b", "rate": "0.6", "pairs": "100"})
+
+    def test_values_do_not_shift_columns(self):
+        # 마이그레이션이 없으면 새 행의 rate 값이 옛 헤더의 다른 열로 밀려 들어간다.
+        append_csv(self.csv, ["run_id", "rate"], {"run_id": "a", "rate": 0.5})
+        append_csv(self.csv, ["run_id", "pairs", "rate"],
+                   {"run_id": "b", "pairs": 7, "rate": 0.6})
+        _, rows = self._read()
+        self.assertEqual(rows[1]["rate"], "0.6")
+        self.assertEqual(rows[1]["pairs"], "7")
+
+    def test_dropped_column_is_removed_from_history(self):
+        append_csv(self.csv, ["run_id", "old"], {"run_id": "a", "old": 1})
+        append_csv(self.csv, ["run_id"], {"run_id": "b"})
+        header, rows = self._read()
+        self.assertEqual(header, ["run_id"])
+        self.assertEqual([r["run_id"] for r in rows], ["a", "b"])
+
+    def test_unchanged_header_is_not_rewritten(self):
+        append_csv(self.csv, ["run_id", "rate"], {"run_id": "a", "rate": 0.5})
+        self.assertFalse(migrate_csv_header(self.csv, ["run_id", "rate"]))
+
+    def test_previous_run_survives_migration(self):
+        # 마이그레이션이 과거 행을 날려버리면 비교 기준선이 사라진다.
+        append_csv(self.csv, ["run_id", "rate"], {"run_id": "a", "rate": 0.5})
+        append_csv(self.csv, ["run_id", "rate", "pairs"],
+                   {"run_id": "b", "rate": 0.6, "pairs": 100})
+        prev = read_previous_run(self.csv, exclude_run_id="b")
+        self.assertEqual(prev["run_id"], "a")
+
+
+class SampleSizeWarningTests(unittest.TestCase):
+    """얇은 표본의 충족률을 추세로 읽으면 노이즈를 개선으로 착각한다.
+
+    실제 정답에서 이벤트 cannot-link 는 48쌍, 토픽 cannot-link 는 0쌍이었는데 리포트에는
+    "31.2%" / "N/A" 만 찍혀 표본 크기가 보이지 않았다. 0쌍과 얇은 표본은 뜻이 다르므로
+    (감지 불가 / 값은 나오지만 못 믿음) 문구를 구분한다.
+    """
+
+    def test_zero_pairs_says_undetectable(self):
+        (msg,) = sample_size_warnings([("토픽 cannot-link", 0)])
+        self.assertIn("0쌍", msg)
+        self.assertIn("감지할 수 없", msg)
+
+    def test_none_is_treated_as_zero(self):
+        # 지표가 아직 계산되지 않은 경우도 "측정 못 함"으로 알려야 한다.
+        (msg,) = sample_size_warnings([("토픽 cannot-link", None)])
+        self.assertIn("감지할 수 없", msg)
+
+    def test_thin_sample_says_do_not_trend(self):
+        (msg,) = sample_size_warnings([("이벤트 cannot-link", 48)])
+        self.assertIn("48쌍", msg)
+        self.assertIn("추세", msg)
+        self.assertNotIn("감지할 수 없", msg)
+
+    def test_sufficient_sample_is_silent(self):
+        self.assertEqual(sample_size_warnings([("이벤트 must-link", 1189)]), [])
+
+    def test_boundary_is_not_warned(self):
+        self.assertEqual(sample_size_warnings([("x", MIN_RELIABLE_PAIRS)]), [])
+        self.assertEqual(len(sample_size_warnings([("x", MIN_RELIABLE_PAIRS - 1)])), 1)
+
+    def test_each_label_gets_its_own_warning(self):
+        msgs = sample_size_warnings([("must", 0), ("cannot", 48), ("ok", 500)])
+        self.assertEqual(len(msgs), 2)
+        self.assertIn("must", msgs[0])
+        self.assertIn("cannot", msgs[1])
 
 
 class CompareRunsParameterizationTests(unittest.TestCase):

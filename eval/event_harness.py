@@ -55,6 +55,7 @@ from diagnose_violations import (  # noqa: E402
     run_diagnosis,
 )
 from extract_snapshot import build_snapshot  # noqa: E402
+from harness_common import MIN_RELIABLE_PAIRS  # noqa: E402
 from harness_common import coerce as _coerce  # noqa: E402
 from harness_common import fmt as _fmt  # noqa: E402
 from harness_common import patch_dotenv as _patch_dotenv  # noqa: E402
@@ -69,6 +70,7 @@ RUNS_CSV = "event_runs.csv"
 CSV_COLUMNS = [
     "run_id", "config_tag", "timestamp",
     "event_must_rate", "event_cannot_rate",
+    "event_must_pairs", "event_cannot_pairs",
     "events_total", "articles_assigned", "single_article_events",
     "c_a", "c_b", "c_c", "c_d", "c_nolog",
     "rubric_e1_ratio", "rubric_e2",
@@ -126,7 +128,17 @@ def drain_events(
 
 
 def _rate(pairs, clusters, *, expect_same):
-    return evaluate_pairs(pairs, clusters, expect_same=expect_same, examples_limit=0)["rate"]
+    return _rate_with_size(pairs, clusters, expect_same=expect_same)[0]
+
+
+def _rate_with_size(pairs, clusters, *, expect_same) -> tuple:
+    """(충족률, 채점 가능한 쌍 수)를 함께 돌려준다.
+
+    분모는 두 기사가 **모두** 스냅샷에 있는 쌍만 센다(evaluate_pairs 의 unknown 제외 규칙).
+    정답 파일의 전체 쌍 수와 다를 수 있고, 그 차이가 곧 커버리지다.
+    """
+    result = evaluate_pairs(pairs, clusters, expect_same=expect_same, examples_limit=0)
+    return result["rate"], result["satisfied"] + result["violated"]
 
 
 def _rubric_value(rubric: dict, check_id: str, key: str):
@@ -153,12 +165,20 @@ def collect_metrics(
     causes = diagnosis.get("must_link_causes") or {}
     events = snapshot.get("events") or []
 
+    must_rate, must_pairs = _rate_with_size(
+        ec.get("must_link"), clusters, expect_same=True)
+    cannot_rate, cannot_pairs = _rate_with_size(
+        ec.get("cannot_link"), clusters, expect_same=False)
+
     return {
         "run_id": run_id,
         "config_tag": config_tag,
         "timestamp": timestamp,
-        "event_must_rate": _rate(ec.get("must_link"), clusters, expect_same=True),
-        "event_cannot_rate": _rate(ec.get("cannot_link"), clusters, expect_same=False),
+        "event_must_rate": must_rate,
+        "event_cannot_rate": cannot_rate,
+        # 충족률과 함께 기록해 두지 않으면 나중에 CSV만 보고는 표본 크기를 알 수 없다.
+        "event_must_pairs": must_pairs,
+        "event_cannot_pairs": cannot_pairs,
         "events_total": len(events),
         "articles_assigned": len(clusters),
         # 단일기사 이벤트는 과분할의 가장 직접적인 신호다 (루브릭 R-E1과 같은 관점).
@@ -194,6 +214,15 @@ def detect_warnings(current: dict, previous: dict | None) -> list[str]:
             f"이벤트의 {single_ratio * 100:.0f}%가 단일기사입니다. 과분할이 의심됩니다 "
             "— must-link 충족률이 낮다면 거리 임계값부터 보세요."
         )
+
+    # 표본이 작은 충족률을 추세로 읽으면 노이즈를 개선으로 착각한다. cannot-link 정답은
+    # 검수에서 "이 기사는 빼야 한다"고 명시한 건에서만 나오므로 특히 얇다.
+    warnings.extend(
+        harness_common.sample_size_warnings(
+            [("이벤트 must-link", current.get("event_must_pairs")),
+             ("이벤트 cannot-link", current.get("event_cannot_pairs"))]
+        )
+    )
 
     if previous:
         prev_events = _coerce(previous.get("events_total"))
@@ -240,6 +269,18 @@ def append_csv(path: Path, row: dict) -> None:
     harness_common.append_csv(path, CSV_COLUMNS, row)
 
 
+def _pairs_cell(size) -> str:
+    """채점된 쌍 수. 표본이 얇으면 숫자 옆에서 바로 드러나게 한다.
+
+    충족률만 찍으면 "31.2%"가 1,000쌍짜리인지 48쌍짜리인지 구분되지 않는다.
+    """
+    if not size:
+        return "0쌍 ⚠️ 측정 불가"
+    if size < MIN_RELIABLE_PAIRS:
+        return f"{size:,}쌍 ⚠️ 표본 부족"
+    return f"{size:,}쌍"
+
+
 def format_report(metrics: dict, diagnosis: dict, comparison: list, warnings: list) -> str:
     """마크다운 상세 리포트를 만든다."""
     meta = diagnosis.get("meta") or {}
@@ -256,10 +297,12 @@ def format_report(metrics: dict, diagnosis: dict, comparison: list, warnings: li
         "",
         "## 제약 충족률",
         "",
-        "| 제약 | 충족률 |",
-        "|---|---|",
-        f"| 이벤트 must-link | {_fmt(metrics['event_must_rate'])} |",
-        f"| 이벤트 cannot-link | {_fmt(metrics['event_cannot_rate'])} |",
+        "| 제약 | 충족률 | 채점된 쌍 |",
+        "|---|---|---|",
+        f"| 이벤트 must-link | {_fmt(metrics['event_must_rate'])} | "
+        f"{_pairs_cell(metrics['event_must_pairs'])} |",
+        f"| 이벤트 cannot-link | {_fmt(metrics['event_cannot_rate'])} | "
+        f"{_pairs_cell(metrics['event_cannot_pairs'])} |",
         "",
         "## 구조 지표 (충족률만으로는 못 보는 것)",
         "",
@@ -415,12 +458,19 @@ def main() -> None:
     print("\n" + "═" * 64)
     print(f"이벤트 하네스 결과: {args.run_id}  ({args.config_tag or '태그 없음'})")
     print("═" * 64)
-    print(f"  must-link  충족률 : {_fmt(metrics['event_must_rate'])}")
-    print(f"  cannot-link 충족률 : {_fmt(metrics['event_cannot_rate'])}")
+    print(f"  must-link  충족률 : {_fmt(metrics['event_must_rate'])}"
+          f"  ({_pairs_cell(metrics['event_must_pairs'])})")
+    print(f"  cannot-link 충족률 : {_fmt(metrics['event_cannot_rate'])}"
+          f"  ({_pairs_cell(metrics['event_cannot_pairs'])})")
     print(f"  이벤트 개수        : {metrics['events_total']:,} "
           f"(단일기사 {metrics['single_article_events']:,})")
+    # 진단 불가(?)를 빼면 "A 0 / B 0 / C 0 / D 0" 이 "위반 원인 없음"으로 읽힌다.
+    # --skip-classify 로 재채점하면 분류기 로그가 없어 전부 ?로 떨어지는데, 그 상태가
+    # 원인이 사라진 것처럼 보이면 안 된다.
+    nolog = metrics.get("c_nolog") or 0
     print(f"  위반 원인          : A {metrics['c_a']} / B {metrics['c_b']} / "
-          f"C {metrics['c_c']} / D {metrics['c_d']}")
+          f"C {metrics['c_c']} / D {metrics['c_d']}"
+          + (f" / ? {nolog} (진단 불가)" if nolog else ""))
 
     if comparison:
         print(f"\n  직전 실행({previous.get('run_id')}) 대비:")

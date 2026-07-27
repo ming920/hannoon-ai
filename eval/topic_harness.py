@@ -52,6 +52,7 @@ from collector.storage import ensure_db  # noqa: E402
 import harness_common  # noqa: E402
 import rubric_checks  # noqa: E402
 from constraint_checks import evaluate_pairs  # noqa: E402
+from harness_common import MIN_RELIABLE_PAIRS  # noqa: E402
 from harness_common import coerce as _coerce  # noqa: E402
 from harness_common import fmt as _fmt  # noqa: E402
 from harness_common import patch_dotenv as _patch_dotenv  # noqa: E402
@@ -83,6 +84,7 @@ RUNS_CSV = "topic_runs.csv"
 CSV_COLUMNS = [
     "run_id", "config_tag", "timestamp",
     "topic_must_rate", "topic_cannot_rate",
+    "topic_must_pairs", "topic_cannot_pairs",
     "event_must_rate", "event_cannot_rate",
     "topics_total", "events_total", "events_assigned",
     "t_propagated", "t_subtopic_split", "t_a", "t_b", "t_c", "t_d", "t_nolog",
@@ -159,7 +161,53 @@ def drain_topics(cmd: list, env: dict, db_url: str, min_net: int, log_path: Path
 
 
 def _rate(pairs, clusters, *, expect_same):
-    return evaluate_pairs(pairs, clusters, expect_same=expect_same, examples_limit=0)["rate"]
+    return _rate_with_size(pairs, clusters, expect_same=expect_same)[0]
+
+
+def _rate_with_size(pairs, clusters, *, expect_same) -> tuple:
+    """(충족률, 채점 가능한 쌍 수)를 함께 돌려준다 — 충족률만 보면 표본 크기가 숨는다."""
+    result = evaluate_pairs(pairs, clusters, expect_same=expect_same, examples_limit=0)
+    return result["rate"], result["satisfied"] + result["violated"]
+
+
+def _pairs_cell(size) -> str:
+    """채점된 쌍 수. 표본이 얇으면 숫자 옆에서 바로 드러나게 한다."""
+    if not size:
+        return "0쌍 ⚠️ 측정 불가"
+    if size < MIN_RELIABLE_PAIRS:
+        return f"{size:,}쌍 ⚠️ 표본 부족"
+    return f"{size:,}쌍"
+
+
+_MISSING_LOG_WARNING = (
+    "분류기 로그가 없어 위반 원인을 진단하지 못했습니다 — 원인이 전부 0인 것은 "
+    "'위반 원인 없음'이 아니라 '진단 못 함'입니다."
+)
+
+
+def has_topic_review(gold: dict) -> bool:
+    """정답 파일에 **토픽을 직접 검수한 흔적**이 있는지 본다.
+
+    constraints-v1 의 `_work.topics` / `_work.edges` 가 검수 도구의 작업 상태다. 2026-07-20
+    검수본은 둘 다 비어 있다 — 검수자는 이벤트만 봤고, 토픽 정답 1,309쌍은 그 이벤트 판정에서
+    파생시킨 값이다. 파생값을 사람이 매긴 정답처럼 읽으면 토픽 충족률을 과신하게 된다.
+
+    나중에 실제 토픽 검수가 들어오면 이 함수가 자동으로 True 가 되어 주의 문구가 사라진다.
+    """
+    work = (gold or {}).get("_work") or {}
+    return bool(work.get("topics") or work.get("edges"))
+
+
+def _provenance_note(topic_review_present) -> str:
+    if topic_review_present:
+        return "> 토픽 정답은 사람이 토픽 구조를 직접 검수한 결과입니다."
+    return (
+        "> ⚠️ **토픽 정답은 사람이 검수한 것이 아닙니다.** 정답 파일에 토픽 검수 흔적"
+        "(`_work.topics`/`_work.edges`)이 없습니다 — 검수자는 이벤트만 검수했고, 위 토픽"
+        " must-link 는 그 판정에서 파생시킨 값입니다.\n"
+        "> 토픽은 이벤트보다 큰 바구니라 \"같이 있어야 한다\"가 자동으로 더 잘 만족됩니다."
+        " 토픽 충족률이 이벤트보다 높은 것은 토픽 분류가 더 낫다는 뜻이 아닙니다."
+    )
 
 
 def _rubric_value(rubric: dict, check_id: str, key: str):
@@ -189,12 +237,20 @@ def collect_metrics(
     causes = diagnosis.get("topic_must_link_causes") or {}
     events = snapshot.get("events") or []
 
+    topic_must_rate, topic_must_pairs = _rate_with_size(
+        tc.get("must_link"), topic_clusters, expect_same=True)
+    topic_cannot_rate, topic_cannot_pairs = _rate_with_size(
+        tc.get("cannot_link"), topic_clusters, expect_same=False)
+
     return {
         "run_id": run_id,
         "config_tag": config_tag,
         "timestamp": timestamp,
-        "topic_must_rate": _rate(tc.get("must_link"), topic_clusters, expect_same=True),
-        "topic_cannot_rate": _rate(tc.get("cannot_link"), topic_clusters, expect_same=False),
+        "topic_must_rate": topic_must_rate,
+        "topic_cannot_rate": topic_cannot_rate,
+        "topic_must_pairs": topic_must_pairs,
+        "topic_cannot_pairs": topic_cannot_pairs,
+        "topic_review_present": has_topic_review(gold),
         "event_must_rate": _rate(ec.get("must_link"), event_clusters, expect_same=True),
         "event_cannot_rate": _rate(ec.get("cannot_link"), event_clusters, expect_same=False),
         "topics_total": len(snapshot.get("topics") or []),
@@ -227,6 +283,19 @@ def detect_warnings(current: dict, previous: dict | None) -> list[str]:
 
     if current["topics_total"] == 0:
         warnings.append("토픽이 0개입니다 — 분류가 실행되지 않았을 수 있습니다.")
+
+    if current.get("topic_review_present") is False:
+        warnings.append(
+            "토픽 정답이 사람 검수가 아니라 이벤트 검수에서 파생된 값입니다 — 토픽 "
+            "충족률이 이벤트보다 높은 것은 분류가 더 낫다는 뜻이 아닙니다(토픽이 더 큰 "
+            "바구니라 must-link 가 자동으로 더 잘 만족됩니다)."
+        )
+
+    warnings.extend(
+        harness_common.sample_size_warnings(
+            [("토픽 must-link", current.get("topic_must_pairs"))]
+        )
+    )
 
     if current["topic_cannot_rate"] is None:
         warnings.append(
@@ -294,12 +363,17 @@ def format_report(metrics: dict, diagnosis: dict, comparison: list, warnings: li
         "",
         "## 제약 충족률",
         "",
-        "| 제약 | 충족률 |",
-        "|---|---|",
-        f"| 토픽 must-link | {_fmt(metrics['topic_must_rate'])} |",
-        f"| 토픽 cannot-link | {_fmt(metrics['topic_cannot_rate'])} |",
-        f"| 이벤트 must-link (참고, 이번 실행에서 불변) | {_fmt(metrics['event_must_rate'])} |",
-        f"| 이벤트 cannot-link (참고) | {_fmt(metrics['event_cannot_rate'])} |",
+        "| 제약 | 충족률 | 채점된 쌍 |",
+        "|---|---|---|",
+        f"| 토픽 must-link | {_fmt(metrics['topic_must_rate'])} | "
+        f"{_pairs_cell(metrics['topic_must_pairs'])} |",
+        f"| 토픽 cannot-link | {_fmt(metrics['topic_cannot_rate'])} | "
+        f"{_pairs_cell(metrics['topic_cannot_pairs'])} |",
+        f"| 이벤트 must-link (참고, 이번 실행에서 불변) | "
+        f"{_fmt(metrics['event_must_rate'])} | — |",
+        f"| 이벤트 cannot-link (참고) | {_fmt(metrics['event_cannot_rate'])} | — |",
+        "",
+        _provenance_note(metrics.get("topic_review_present")),
         "",
         "## 구조 지표 (충족률만으로는 못 보는 것)",
         "",
@@ -446,6 +520,10 @@ def main() -> None:
     previous = read_previous_run(csv_path, args.run_id)
     comparison = compare_runs(metrics, previous)
     warnings = detect_warnings(metrics, previous)
+    if not log_path.exists():
+        # 로그가 없으면 원인 집계가 전부 0으로 나온다. 그 상태를 "위반 원인 없음"으로
+        # 읽으면 정반대의 결론에 도달한다 (--skip-classify 재채점에서 실제로 그랬다).
+        warnings.insert(0, _MISSING_LOG_WARNING)
 
     append_csv(csv_path, metrics)
     report_path = out_dir / f"topic-{args.run_id}.md"
@@ -457,13 +535,18 @@ def main() -> None:
     print("\n" + "═" * 64)
     print(f"토픽 하네스 결과: {args.run_id}  ({args.config_tag or '태그 없음'})")
     print("═" * 64)
-    print(f"  토픽 must-link 충족률 : {_fmt(metrics['topic_must_rate'])}")
+    print(f"  토픽 must-link 충족률 : {_fmt(metrics['topic_must_rate'])}"
+          f"  ({_pairs_cell(metrics['topic_must_pairs'])}"
+          f"{'' if metrics.get('topic_review_present') else ', 이벤트 검수에서 파생'})")
     print(f"  토픽 개수             : {metrics['topics_total']:,}  "
           f"(이벤트 {metrics['events_total']:,})")
     print(f"  R-T1 중복 토픽 쌍     : {_fmt(metrics['rubric_t1'])}")
+    # 진단 불가(?)를 빼면 원인이 전부 0일 때 "위반 원인 없음"으로 읽힌다.
+    t_nolog = metrics.get("t_nolog") or 0
     print(f"  위반 원인             : 전파 {metrics['t_propagated']} / "
           f"서브분할 {metrics['t_subtopic_split']} / A {metrics['t_a']} / "
-          f"B {metrics['t_b']} / C {metrics['t_c']} / D {metrics['t_d']}")
+          f"B {metrics['t_b']} / C {metrics['t_c']} / D {metrics['t_d']}"
+          + (f" / ? {t_nolog} (진단 불가)" if t_nolog else ""))
 
     if comparison:
         print(f"\n  직전 실행({previous.get('run_id')}) 대비:")

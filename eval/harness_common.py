@@ -44,10 +44,45 @@ def fmt(value) -> str:
     return str(value)
 
 
+def migrate_csv_header(path: Path, columns: list[str]) -> bool:
+    """기존 CSV를 새 열 구성으로 옮겨 적는다. 옮겼으면 True.
+
+    지표 열은 하네스를 개선하면서 늘어난다. 헤더를 최초 1회만 쓰는 구조에서 열이 바뀌면
+    새 행이 **옛 헤더 아래에** 다른 순서로 쌓여 값이 엉뚱한 열로 밀려 들어간다. 그러면 추세
+    비교가 조용히 거짓말을 하기 시작하므로, 덧붙이기 전에 헤더를 맞춘다.
+    """
+    with path.open(encoding="utf-8", newline="") as f:
+        reader = csv.DictReader(f)
+        existing = reader.fieldnames or []
+        if existing == columns:
+            return False
+        rows = list(reader)
+
+    with path.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=columns, extrasaction="ignore")
+        writer.writeheader()
+        for old in rows:
+            writer.writerow({c: old.get(c, "") for c in columns})
+
+    added = [c for c in columns if c not in existing]
+    dropped = [c for c in existing if c not in columns]
+    detail = ", ".join(
+        part for part in (
+            f"추가 {'/'.join(added)}" if added else "",
+            f"제거 {'/'.join(dropped)}" if dropped else "",
+        ) if part
+    ) or "순서 변경"
+    print(f"[{path.name}] 열 구성이 바뀌어 기존 {len(rows)}행을 새 헤더로 옮겼습니다 ({detail}). "
+          "새로 생긴 열의 과거 값은 비어 있습니다.")
+    return True
+
+
 def append_csv(path: Path, columns: list[str], row: dict) -> None:
-    """실행 결과를 CSV에 한 줄 덧붙인다 (헤더는 최초 1회)."""
+    """실행 결과를 CSV에 한 줄 덧붙인다 (헤더는 최초 1회, 열이 바뀌면 기존 행을 옮긴다)."""
     path.parent.mkdir(parents=True, exist_ok=True)
     is_new = not path.exists() or path.stat().st_size == 0
+    if not is_new:
+        migrate_csv_header(path, columns)
     with path.open("a", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=columns, extrasaction="ignore")
         if is_new:
@@ -136,6 +171,33 @@ def read_settings(dotenv_path: Path) -> dict:
         key, value = line.split("=", 1)
         settings[key.strip()] = value.strip()
     return settings
+
+
+# 충족률은 분모가 작으면 몇 쌍만 뒤집혀도 크게 흔들린다. 실제로 이벤트 cannot-link 정답은
+# 검수에서 "이 기사는 빼야 한다"고 명시한 6개 이벤트에서만 나와 48쌍이 전부였는데, 리포트에는
+# "31.2%"만 찍혀 성능 지표처럼 읽혔다. 토픽 cannot-link 는 아예 0쌍이다.
+MIN_RELIABLE_PAIRS = 100
+
+
+def sample_size_warnings(labeled_sizes) -> list[str]:
+    """(이름, 채점된 쌍 수) 목록에서 표본이 얇은 지표에 대한 경고를 만든다.
+
+    0쌍은 "그 실패 양상을 아예 감지할 수 없다"는 뜻이고, 0보다 크지만 얇으면
+    "값은 나오지만 추세로 읽으면 안 된다"는 뜻이라 문구를 구분한다.
+    """
+    warnings = []
+    for label, size in labeled_sizes:
+        if not size:
+            warnings.append(
+                f"{label} 정답이 0쌍입니다 — 이 지표로는 해당 실패 양상을 감지할 수 "
+                "없습니다. 충족률 N/A 를 '문제 없음'으로 읽지 마세요."
+            )
+        elif size < MIN_RELIABLE_PAIRS:
+            warnings.append(
+                f"{label} 정답이 {size:,}쌍뿐입니다 — 몇 쌍만 뒤집혀도 충족률이 크게 "
+                "흔들리므로 실행 간 추세 판단에 쓰지 마세요."
+            )
+    return warnings
 
 
 def drain(

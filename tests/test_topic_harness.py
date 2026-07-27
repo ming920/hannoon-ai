@@ -30,6 +30,7 @@ from topic_harness import (  # noqa: E402
     count_unassigned_events,
     detect_warnings,
     format_report,
+    has_topic_review,
     read_previous_run,
     reset_topic_layer,
 )
@@ -215,6 +216,56 @@ class CollectMetricsTests(unittest.TestCase):
 # ══════════════════════════════════════════════════════════════════════════
 # 비교 / 경고
 # ══════════════════════════════════════════════════════════════════════════
+
+
+class TopicReviewProvenanceTests(unittest.TestCase):
+    """토픽 정답이 사람 검수인지 이벤트 검수의 파생값인지 구분한다.
+
+    2026-07-20 검수본은 `_work.topics`/`_work.edges` 가 모두 비어 있다 — 검수자는 이벤트만
+    봤다. 그런데 리포트에는 "토픽 must-link 91.0%" 만 찍혀, 이벤트(84.0%)보다 높으니 토픽
+    분류가 더 낫다고 읽히기 쉬웠다. 실제로는 토픽이 더 큰 바구니라 must-link 가 자동으로 더
+    잘 만족되는 것뿐이다.
+    """
+
+    def test_empty_work_means_no_topic_review(self):
+        self.assertFalse(has_topic_review({"_work": {"topics": {}, "edges": {}}}))
+
+    def test_missing_work_means_no_topic_review(self):
+        self.assertFalse(has_topic_review({}))
+        self.assertFalse(has_topic_review(None))
+
+    def test_topics_present_means_reviewed(self):
+        self.assertTrue(has_topic_review({"_work": {"topics": {"1": {}}, "edges": {}}}))
+
+    def test_edges_alone_also_counts(self):
+        self.assertTrue(has_topic_review({"_work": {"topics": {}, "edges": {"1": {}}}}))
+
+    def test_metric_records_provenance(self):
+        self.assertFalse(_metrics()["topic_review_present"])
+        reviewed = dict(GOLD, _work={"topics": {"1": {}}, "edges": {}})
+        self.assertTrue(_metrics(gold=reviewed)["topic_review_present"])
+
+    def test_warning_fires_only_when_underived(self):
+        warnings = detect_warnings(_metrics(), None)
+        self.assertTrue(any("파생된 값" in w for w in warnings), warnings)
+
+        reviewed = dict(GOLD, _work={"topics": {"1": {}}, "edges": {}})
+        warnings = detect_warnings(_metrics(gold=reviewed), None)
+        self.assertFalse(any("파생된 값" in w for w in warnings), warnings)
+
+    def test_report_carries_the_caveat(self):
+        text = format_report(_metrics(), DIAGNOSIS, [], [])
+        self.assertIn("사람이 검수한 것이 아닙니다", text)
+
+    def test_report_drops_caveat_when_reviewed(self):
+        reviewed = dict(GOLD, _work={"topics": {"1": {}}, "edges": {}})
+        text = format_report(_metrics(gold=reviewed), DIAGNOSIS, [], [])
+        self.assertNotIn("사람이 검수한 것이 아닙니다", text)
+
+    def test_report_shows_pair_counts(self):
+        text = format_report(_metrics(), DIAGNOSIS, [], [])
+        self.assertIn("채점된 쌍", text)
+        self.assertIn("표본 부족", text)  # 픽스처는 2쌍뿐이다
 
 
 class CompareRunsTests(unittest.TestCase):

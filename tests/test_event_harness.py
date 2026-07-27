@@ -151,6 +151,18 @@ class CollectMetricsTests(unittest.TestCase):
         for column in CSV_COLUMNS:
             self.assertIn(column, self.m, f"{column} 누락")
 
+    def test_pair_counts_recorded(self):
+        # 충족률만 남기면 나중에 CSV 만 보고는 "31.2%"가 1,000쌍짜리인지 48쌍짜리인지 모른다.
+        self.assertEqual(self.m["event_must_pairs"], 2)   # [1,2] 충족 + [1,3] 위반
+        self.assertEqual(self.m["event_cannot_pairs"], 1)  # [1,4]
+
+    def test_unscorable_pairs_excluded_from_count(self):
+        # 스냅샷에 없는 기사가 낀 쌍은 채점 불가이므로 분모에서 빠져야 한다.
+        m = _metrics(gold={"event_constraints": {
+            "must_link": [[1, 2], [1, 9999]], "cannot_link": []}})
+        self.assertEqual(m["event_must_pairs"], 1)
+        self.assertEqual(m["event_cannot_pairs"], 0)
+
 
 class DetectWarningsTests(unittest.TestCase):
     def test_zero_events_warns_and_stops(self):
