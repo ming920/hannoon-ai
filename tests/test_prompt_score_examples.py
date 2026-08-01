@@ -33,6 +33,9 @@ from topic_classifier import prompts as topic_prompts  # noqa: E402
 # "score": 0.93 / "score":0.9 / "score": 1 처럼 값이 숫자 리터럴인 경우
 _LITERAL_SCORE = re.compile(r'"score"\s*:\s*[0-9]')
 
+# 구간 목록 한 줄("- 0.90~1.00: ...", "- 0.75~0.89: ...")의 시작 부분
+_SCORE_BAND_LINE = re.compile(r"^- (0\.\d\d)[~ ]", re.MULTILINE)
+
 _CANDIDATE = {
     "id": 1,
     "title": "후보 이벤트",
@@ -94,8 +97,29 @@ class ScoreExampleTests(unittest.TestCase):
         # 자리표시자만 두고 기준을 안 주면 점수가 근거 없는 난수가 된다.
         for name, text in self._prompts().items():
             with self.subTest(prompt=name):
-                self.assertIn("0.90 이상", text)
-                self.assertIn("0.50 미만", text)
+                self.assertIn("점수 기준:", text)
+                self.assertIn("0.90", text)
+                self.assertIn("0.39", text)
+
+    def test_scale_is_defined_once(self):
+        """구간 정의는 프롬프트당 한 벌이어야 한다.
+
+        2026-07-31: 구간이 상단 _SCORE_GUIDE 와 하단 "점수 기준"에 두 벌 있었고 경계가
+        어긋나 있었다(이벤트 중간대 0.50 vs 0.40, 토픽 두 번째 구간 0.70 vs 0.75).
+        모델이 어느 눈금을 따르는지 알 수 없고, 임계값을 어디에 두어야 하는지도 정할 수 없다.
+        """
+        for name, text in self._prompts().items():
+            with self.subTest(prompt=name):
+                self.assertEqual(
+                    text.count("점수 기준:"), 1,
+                    f"{name} 에 '점수 기준:' 섹션이 여러 벌 있습니다.",
+                )
+                bands = _SCORE_BAND_LINE.findall(text)
+                self.assertEqual(
+                    len(bands), 4,
+                    f"{name} 의 구간 목록이 4줄이 아닙니다(찾은 값: {bands}). "
+                    f"구간 정의가 두 벌이거나 일부가 빠졌습니다.",
+                )
 
     def test_placeholder_is_shared_across_modules(self):
         # 두 모듈이 서로 다른 표기를 쓰면 위 검사가 한쪽을 놓친다.
