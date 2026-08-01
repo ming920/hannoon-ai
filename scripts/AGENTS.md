@@ -4,12 +4,17 @@
 # scripts
 
 ## Purpose
-One-off maintenance / backfill scripts run by operators against the production DB. Not part of
-the automated pipeline.
+Operator and local-dev helpers. Two kinds live here, and they must not be confused:
+- **Production maintenance** (`backfill_summaries.py`) — one-off backfills run against the real DB.
+- **Local dev support** (`local_embedding_proxy.py`, `apply_local_seed.py`) — used only while
+  bringing up a local Supabase per `../docs/local-setup.md`; both refuse or are meaningless
+  against production. Neither is part of the automated pipeline.
 
 ## Key Files
 | File | Description |
 |------|-------------|
+| `local_embedding_proxy.py` | **Local dev only.** OpenAI-compatible embedding proxy in front of Ollama that zero-pads vectors to the schema's `vector(4096)` (bge-m3 returns 1024). Zero-padding preserves cosine distance, so pgvector candidate search is unaffected. Forces `encoding_format=float` upstream — the OpenAI SDK defaults to base64, which would slip through unpadded |
+| `apply_local_seed.py` | **Local dev only.** Loads `eval/data/seed/articles_*.sql` into a local Postgres without psql (psycopg instead). Refuses non-localhost hosts without `--allow-remote` and refuses a non-empty `articles` table (the seed inserts original ids, so it would PK-collide) |
 | `backfill_summaries.py` | Bulk-normalize existing article/event/topic summaries (and optionally regenerate them with an LLM rollup); can reset timeout-failed article jobs |
 
 ## For AI Agents
