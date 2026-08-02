@@ -46,6 +46,51 @@ DEFAULT_TARGET_DIM = 4096
 MAX_BODY_BYTES = 32 * 1024 * 1024
 
 
+class EmbeddingShapeError(ValueError):
+    """패딩할 수 없는 upstream 응답. 돌려줄 HTTP 상태코드를 함께 나른다."""
+
+    def __init__(self, message: str, status: int = 502) -> None:
+        super().__init__(message)
+        self.status = status
+
+
+def force_float_encoding(payload: dict) -> dict:
+    """upstream 요청의 encoding_format 을 float 로 고정한 사본을 만든다.
+
+    OpenAI SDK 는 기본으로 encoding_format="base64" 를 보낸다. 그대로 넘기면 응답의
+    embedding 이 base64 문자열이라 패딩 대상이 되지 못하고 원래 차원이 그대로 나간다.
+    SDK 는 응답이 이미 리스트면 디코딩을 건너뛰므로 float 로 받아도 문제없다.
+    """
+    forced = dict(payload)
+    forced["encoding_format"] = "float"
+    return forced
+
+
+def pad_embeddings(payload: dict, target_dim: int) -> dict:
+    """응답의 각 embedding 을 target_dim 까지 0 으로 채운다(제자리 수정).
+
+    제로 패딩은 코사인 거리를 바꾸지 않는다 — 내적과 두 노름이 그대로다.
+    잘라내는 것은 의미가 깨지므로 하지 않고 에러로 막는다.
+    """
+    for item in payload.get("data") or []:
+        vec = item.get("embedding")
+        if not isinstance(vec, list):
+            # 여기서 조용히 넘기면 패딩 없이 통과해 원래 차원이 그대로 나간다.
+            raise EmbeddingShapeError(
+                f"임베딩이 리스트가 아닙니다(type={type(vec).__name__}). "
+                f"encoding_format 강제가 동작하지 않았을 수 있습니다."
+            )
+        if len(vec) > target_dim:
+            raise EmbeddingShapeError(
+                f"모델이 {len(vec)}차원을 반환했는데 목표 차원은 {target_dim} 입니다. "
+                f"잘라내면 의미가 깨지므로 중단합니다 — --target-dim 을 확인하세요.",
+                status=400,
+            )
+        if len(vec) < target_dim:
+            item["embedding"] = vec + [0.0] * (target_dim - len(vec))
+    return payload
+
+
 class Handler(BaseHTTPRequestHandler):
     ollama_url = DEFAULT_OLLAMA
     target_dim = DEFAULT_TARGET_DIM
@@ -89,48 +134,16 @@ class Handler(BaseHTTPRequestHandler):
             )
             return
 
-        data = upstream.get("data") or []
-        for item in data:
-            vec = item.get("embedding")
-            if not isinstance(vec, list):
-                # 여기 걸리면 패딩 없이 통과해 1024차원이 그대로 나간다. 조용히 넘기지 않는다.
-                self._send(
-                    502,
-                    {
-                        "error": {
-                            "message": (
-                                f"임베딩이 리스트가 아닙니다(type={type(vec).__name__}). "
-                                f"encoding_format 강제가 동작하지 않았을 수 있습니다."
-                            )
-                        }
-                    },
-                )
-                return
-            if len(vec) > self.target_dim:
-                self._send(
-                    400,
-                    {
-                        "error": {
-                            "message": (
-                                f"모델이 {len(vec)}차원을 반환했는데 목표 차원은 {self.target_dim} 입니다. "
-                                f"잘라내면 의미가 깨지므로 중단합니다 — --target-dim 을 확인하세요."
-                            )
-                        }
-                    },
-                )
-                return
-            if len(vec) < self.target_dim:
-                item["embedding"] = vec + [0.0] * (self.target_dim - len(vec))
+        try:
+            padded = pad_embeddings(upstream, self.target_dim)
+        except EmbeddingShapeError as exc:
+            self._send(exc.status, {"error": {"message": str(exc)}})
+            return
 
-        self._send(200, upstream)
+        self._send(200, padded)
 
     def _call_ollama(self, payload: dict) -> dict:
-        # OpenAI SDK 는 기본으로 encoding_format="base64" 를 보낸다. 그대로 넘기면 응답의
-        # embedding 이 base64 문자열이라 패딩 대상이 되지 못하고 원래 차원이 그대로 나간다.
-        # 여기서 float 로 강제해 리스트를 받는다 — SDK 는 응답이 이미 리스트면 디코딩을 건너뛴다.
-        payload = dict(payload)
-        payload["encoding_format"] = "float"
-        body = json.dumps(payload).encode()
+        body = json.dumps(force_float_encoding(payload)).encode()
         req = urllib.request.Request(
             f"{self.ollama_url.rstrip('/')}/v1/embeddings",
             data=body,

@@ -13,8 +13,8 @@ Operator and local-dev helpers. Two kinds live here, and they must not be confus
 ## Key Files
 | File | Description |
 |------|-------------|
-| `local_embedding_proxy.py` | **Local dev only.** OpenAI-compatible embedding proxy in front of Ollama that zero-pads vectors to the schema's `vector(4096)` (bge-m3 returns 1024). Zero-padding preserves cosine distance, so pgvector candidate search is unaffected. Forces `encoding_format=float` upstream — the OpenAI SDK defaults to base64, which would slip through unpadded |
-| `apply_local_seed.py` | **Local dev only.** Loads `eval/data/seed/articles_*.sql` into a local Postgres without psql (psycopg instead). Refuses non-localhost hosts without `--allow-remote` and refuses a non-empty `articles` table (the seed inserts original ids, so it would PK-collide) |
+| `local_embedding_proxy.py` | **Local dev only.** OpenAI-compatible embedding proxy in front of Ollama that zero-pads vectors to the schema's `vector(4096)` (bge-m3 returns 1024). Zero-padding preserves cosine distance, so pgvector candidate search is unaffected. Forces `encoding_format=float` upstream — the OpenAI SDK defaults to base64, which would slip through unpadded. Padding/encoding logic is pure (`pad_embeddings`, `force_float_encoding`) and tested in `tests/test_local_embedding_proxy.py` |
+| `apply_local_seed.py` | **Local dev only.** Loads `eval/data/seed/*.sql` into a local Postgres without psql (psycopg instead). Guards, split so host checks run *before* connecting: non-localhost is refused without `--allow-remote`, and **`--replace` (which deletes 11 tables) is refused on any remote host even with `--allow-remote`**. Article seeds refuse a non-empty `articles` table; event seeds refuse an empty one (they reference articles by FK). Tested in `tests/test_apply_local_seed.py` |
 | `backfill_summaries.py` | Bulk-normalize existing article/event/topic summaries (and optionally regenerate them with an LLM rollup); can reset timeout-failed article jobs |
 
 ## For AI Agents
