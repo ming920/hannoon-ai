@@ -27,9 +27,26 @@ SUBTOPIC_ASSIGN_SCORE_THRESHOLD = float(
 # (홀드아웃 검증 holdout-emb065-1: covered P 0.926/F1 0.812/om 1 vs llm F1 0.557).
 SUBTOPIC_MODE = os.environ.get("TOPIC_SUBTOPIC_MODE", "embedding").strip().lower()
 # embedding 모드에서 기존 서브토픽에 편입하기 위한 최소 코사인 유사도.
-# 두 데이터셋 동시 스위프 기준 0.65가 강건점(0.65~0.70 플래토): 원본 P 1.00/om 0,
-# 홀드아웃 P 0.93/om 1. 0.55는 홀드아웃에서 과병합(P 0.58)이라 기각.
-SUBTOPIC_SIM_THRESHOLD = float(os.environ.get("TOPIC_SUBTOPIC_SIM_THRESHOLD", "0.65"))
+#
+# 0.65→0.50: 2026-08-03 실데이터 실측(run t002/t003/t004, 로컬 기사 722건). 실데이터에서는
+# 같은 토픽 안 이벤트 쌍의 유사도 중앙값이 0.425, 최대가 0.655 라 0.65 에서는 묶이는 쌍이
+# 84개 중 1개뿐이었다. 그 결과 서브토픽 38개 중 37개가 이벤트 1개짜리(R-S1 97.4%)로,
+# 서브토픽이 이벤트를 그대로 복사하는 상태였다.
+#
+#   임계값   토픽 must   토픽 수   R-S1
+#   off        92.5%      18       —
+#   0.65       90.9%      49     97.4%
+#   0.50       93.4%      33     70.8%   ← 채택
+#   0.45       92.1%      28     70.0%
+#
+# 그 전 0.65 는 더미 데이터셋 두 벌 스위프의 강건점이었고(원본 P 1.00/om 0, 홀드아웃
+# P 0.93/om 1), 거기서는 0.55 가 과병합(P 0.58)이라 기각됐다. LLM 이 생성한 더미는 이벤트
+# 벡터가 실데이터보다 뚜렷하게 갈려 분포가 다르다.
+#
+# ⚠️ 토픽 cannot-link 정답이 0쌍이라 이 값이 과병합을 일으키는지 충족률로는 확인할 수 없다.
+# 더미에서 0.55 가 과병합이었던 만큼, 토픽 cannot 정답을 확보한 뒤 재확인해야 한다.
+# 지금은 R-T1(중복 토픽 0)과 토픽 수만 근거다. 근거: docs/event_clustering_experiments.md
+SUBTOPIC_SIM_THRESHOLD = float(os.environ.get("TOPIC_SUBTOPIC_SIM_THRESHOLD", "0.50"))
 # create 직전 중복 방지 가드(R-T1/R-S4 대응): 동일 스코프(최상위 또는 같은 부모 아래) 내
 # 기존 토픽과 difflib 제목 유사도가 이 값 이상이면 create를 assign으로 강등한다.
 # 0.85는 eval/rubric_checks.py R-T1(토픽 중복)·R-S4(서브토픽-부모 동일범위) 판정 임계값과
