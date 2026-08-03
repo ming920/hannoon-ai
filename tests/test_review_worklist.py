@@ -16,6 +16,7 @@ import unittest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "eval"))
 
 from review_worklist import (  # noqa: E402
+    SAMPLE_PER_EVENT,
     SCHEMA_VERSION,
     VERDICT_CORRECT,
     VERDICT_EXCLUDE,
@@ -23,18 +24,34 @@ from review_worklist import (  # noqa: E402
     WEAK_DISTANCE,
     anchor_is_suspect,
     assign_distances,
+    build_topic_worklist,
     build_worklist,
     format_worklist_markdown,
     known_conflicts,
     merge_into_constraints,
     pairs_from_item,
     score_event,
+    score_topic,
     select_events,
+    select_topics,
+    topic_assign_distances,
+    topic_pairs_from_item,
 )
 
 
 def _log(*entries) -> str:
     return "\n".join(json.dumps(e, ensure_ascii=False) for e in entries)
+
+
+def _topic(tid: int, events: list, title: str = "토픽") -> dict:
+    """events = [(event_id, [article_ids...]), ...]"""
+    return {
+        "id": tid, "title": title,
+        "events": [
+            {"id": eid, "title": f"이벤트 {eid}", "article_ids": list(aids)}
+            for eid, aids in events
+        ],
+    }
 
 
 def _event(eid: int, article_ids: list, title: str = "제목") -> dict:
@@ -354,6 +371,175 @@ class WorklistShapeTests(unittest.TestCase):
     def test_markdown_marks_anchor_article(self):
         # 거리가 없는 기사는 이 이벤트를 만든 기사다 — 빈칸으로 두면 오해를 산다.
         self.assertIn("생성", format_worklist_markdown(self.wl))
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 토픽 단위 검수 — 구성원이 기사가 아니라 이벤트다
+# ══════════════════════════════════════════════════════════════════════════
+
+
+class TopicAssignDistanceTests(unittest.TestCase):
+    def test_reads_distance_of_the_chosen_topic(self):
+        text = _log({
+            "event_id": 7, "final_action": "assign",
+            "llm_decision": {"topic_id": 100},
+            "candidates": [{"topic_id": 99, "distance": 0.2},
+                           {"topic_id": 100, "distance": 0.5}],
+        })
+        self.assertEqual(topic_assign_distances(text), {7: 0.5})
+
+    def test_created_events_are_not_merges(self):
+        text = _log({"event_id": 7, "final_action": "create",
+                     "llm_decision": {"topic_id": None}, "candidates": []})
+        self.assertEqual(topic_assign_distances(text), {})
+
+    def test_later_line_wins_so_subtopic_beats_parent(self):
+        """토픽 로그는 한 이벤트에 parent/sub 두 줄이 찍힌다 — 최종 소속은 뒤쪽이다."""
+        text = _log(
+            {"event_id": 7, "level": "parent", "final_action": "assign",
+             "llm_decision": {"topic_id": 100}, "candidates": [{"topic_id": 100, "distance": 0.5}]},
+            {"event_id": 7, "level": "sub", "final_action": "assign",
+             "llm_decision": {"topic_id": 200}, "candidates": [{"topic_id": 200, "distance": 0.3}]},
+        )
+        self.assertEqual(topic_assign_distances(text), {7: 0.3})
+
+    def test_event_mode_is_unchanged(self):
+        """토픽용으로 파라미터화해도 기존 이벤트 동작은 그대로여야 한다."""
+        text = _log({"article_id": 1, "final_action": "assign",
+                     "llm_decision": {"event_id": 50},
+                     "candidates": [{"event_id": 50, "distance": 0.44}]})
+        self.assertEqual(assign_distances(text), {1: 0.44})
+
+
+class ScoreTopicTests(unittest.TestCase):
+    def test_counts_weakly_attached_events(self):
+        topic = _topic(1, [(10, [1]), (11, [2]), (12, [3])])
+        s = score_topic(topic, {10: 0.1, 11: WEAK_DISTANCE, 12: 0.9})
+        self.assertEqual(s["topic_id"], 1)
+        self.assertEqual(s["size"], 3)          # 구성원 수는 이벤트 수다
+        self.assertEqual(s["weak_count"], 2)    # 경계값은 약한 병합에 포함
+        self.assertTrue(s["eligible"])
+
+    def test_single_event_topic_is_not_eligible(self):
+        self.assertFalse(score_topic(_topic(1, [(10, [1])]), {})["eligible"])
+
+
+class SelectTopicsTests(unittest.TestCase):
+    def _topics(self):
+        return [_topic(t, [(t * 10, [t * 10]), (t * 10 + 1, [t * 10 + 1])]) for t in range(1, 7)]
+
+    def test_control_group_is_included_and_disjoint(self):
+        """대조군이 이 도구의 핵심이다 — 없으면 편향된 정답이 만들어진다."""
+        dists = {10: 0.9, 11: 0.9, 20: 0.9, 21: 0.9}  # 토픽 1·2 만 의심
+        picked = select_topics(self._topics(), dists, targeted=2, control=2, seed=1)
+        kinds = [p["selection"] for p in picked]
+        self.assertEqual(kinds.count("targeted"), 2)
+        self.assertEqual(kinds.count("control"), 2)
+        ids = [p["topic_id"] for p in picked]
+        self.assertEqual(len(ids), len(set(ids)))
+
+    def test_same_seed_gives_same_worklist(self):
+        d = {10: 0.9, 11: 0.9}
+        a = select_topics(self._topics(), d, targeted=1, control=3, seed=7)
+        b = select_topics(self._topics(), d, targeted=1, control=3, seed=7)
+        self.assertEqual([x["topic_id"] for x in a], [x["topic_id"] for x in b])
+
+
+class TopicPairsTests(unittest.TestCase):
+    def _item(self, verdict, not_belonging=()):
+        wl = build_topic_worklist(
+            {"topics": [_topic(1, [(10, [1, 2]), (11, [3]), (12, [4])])]},
+            {10: 0.9, 11: 0.9, 12: 0.9}, targeted=1, control=0, seed=1)
+        item = wl["items"][0]
+        item["verdict"] = verdict
+        item["not_belonging"] = list(not_belonging)
+        return item
+
+    def test_correct_links_across_events_only(self):
+        """같은 이벤트 안 기사 쌍은 이벤트 제약이 다룬다 — 여기서 또 만들지 않는다."""
+        must, cannot = topic_pairs_from_item(self._item(VERDICT_CORRECT))
+        self.assertEqual(cannot, [])
+        self.assertNotIn([1, 2], must)   # 둘 다 이벤트 10 소속
+        self.assertIn([1, 3], must)      # 이벤트 10 ↔ 11
+
+    def test_exclude_makes_cannot_between_removed_and_kept(self):
+        must, cannot = topic_pairs_from_item(self._item(VERDICT_EXCLUDE, [12]))
+        self.assertIn([3, 4], cannot)    # 빠진 12 ↔ 남은 11
+        self.assertIn([1, 4], cannot)    # 빠진 12 ↔ 남은 10
+        self.assertIn([1, 3], must)      # 남은 것끼리는 같은 토픽
+        self.assertNotIn([3, 4], must)
+
+    def test_unsure_makes_nothing(self):
+        self.assertEqual(topic_pairs_from_item(self._item(VERDICT_UNSURE)), ([], []))
+
+    def test_events_are_sampled_to_cap_pair_explosion(self):
+        """기사가 많은 이벤트를 전수로 펼치면 토픽 하나가 지표를 지배한다."""
+        wl = build_topic_worklist(
+            {"topics": [_topic(1, [(10, list(range(1, 21))), (11, list(range(21, 41)))])]},
+            {10: 0.9, 11: 0.9}, targeted=1, control=0, seed=1)
+        ev = wl["items"][0]["events"][0]
+        self.assertEqual(len(ev["sample_article_ids"]), SAMPLE_PER_EVENT)
+        self.assertEqual(ev["article_count"], 20)   # 원래 크기는 그대로 보여준다
+        wl["items"][0]["verdict"] = VERDICT_CORRECT
+        must, _ = topic_pairs_from_item(wl["items"][0])
+        self.assertEqual(len(must), SAMPLE_PER_EVENT ** 2)
+
+
+class TopicMergeTests(unittest.TestCase):
+    def _worklist(self, verdict, not_belonging=()):
+        wl = build_topic_worklist(
+            {"topics": [_topic(1, [(10, [1]), (11, [2])])]},
+            {10: 0.9, 11: 0.9}, targeted=1, control=0, seed=1)
+        wl["items"][0]["verdict"] = verdict
+        wl["items"][0]["not_belonging"] = list(not_belonging)
+        return wl
+
+    def test_merges_into_topic_constraints_not_event(self):
+        merged = merge_into_constraints({}, self._worklist(VERDICT_EXCLUDE, [11]))
+        self.assertIn([1, 2], merged["topic_constraints"]["cannot_link"])
+        self.assertNotIn("event_constraints", merged)
+        self.assertEqual(merged["_review_rounds"][-1]["unit"], "topic")
+
+    def test_contradiction_with_prior_must_is_rejected(self):
+        prior = {"topic_constraints": {"must_link": [[1, 2]], "cannot_link": []}}
+        with self.assertRaises(ValueError) as ctx:
+            merge_into_constraints(prior, self._worklist(VERDICT_EXCLUDE, [11]))
+        self.assertIn("모순", str(ctx.exception))
+
+    def test_original_constraints_are_not_mutated(self):
+        prior = {"topic_constraints": {"must_link": [], "cannot_link": []}}
+        merge_into_constraints(prior, self._worklist(VERDICT_EXCLUDE, [11]))
+        self.assertEqual(prior["topic_constraints"]["cannot_link"], [])
+
+
+class TopicWorklistShapeTests(unittest.TestCase):
+    def setUp(self):
+        self.wl = build_topic_worklist(
+            {"snapshot_date": "2026-08-03", "topics": [
+                _topic(1, [(10, [1]), (11, [2])]),
+                _topic(2, [(20, [3]), (21, [4])]),
+            ]},
+            {10: 0.9, 11: 0.9}, targeted=1, control=1, seed=1,
+            prior_constraints={"topic_constraints": {"cannot_link": [[1, 2]]}})
+
+    def test_unit_is_marked_so_merge_can_route(self):
+        self.assertEqual(self.wl["unit"], "topic")
+        self.assertEqual(self.wl["schema_version"], SCHEMA_VERSION)
+
+    def test_prior_conflicts_are_surfaced(self):
+        item = next(i for i in self.wl["items"] if i["topic_id"] == 1)
+        self.assertEqual(item["known_conflicts"], [[1, 2]])
+
+    def test_events_carry_what_a_reviewer_needs(self):
+        ev = self.wl["items"][0]["events"][0]
+        for key in ("id", "title", "article_count", "sample_article_ids", "distance"):
+            self.assertIn(key, ev)
+
+    def test_markdown_renders_topic_sections(self):
+        text = format_worklist_markdown(self.wl)
+        self.assertIn("토픽 검수 대기열", text)
+        self.assertIn("무작위 대조군", text)
+        self.assertIn("이벤트 id", text)
 
 
 if __name__ == "__main__":

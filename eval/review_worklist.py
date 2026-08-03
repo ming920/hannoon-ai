@@ -67,10 +67,16 @@ VERDICTS = (VERDICT_CORRECT, VERDICT_EXCLUDE, VERDICT_UNSURE)
 # ══════════════════════════════════════════════════════════════════════════
 
 
-def assign_distances(log_text: str) -> dict[int, float]:
-    """기사 → 그 기사가 배정될 때 선택된 이벤트와의 거리.
+def assign_distances(log_text: str, *,
+                     member_key: str = "article_id",
+                     cluster_key: str = "event_id") -> dict[int, float]:
+    """구성원 → 그 구성원이 배정될 때 선택된 묶음과의 거리.
 
-    create 로 끝난 기사는 비교 대상이 없으므로 넣지 않는다(약한 병합이 아니다).
+    create 로 끝난 구성원은 비교 대상이 없으므로 넣지 않는다(약한 병합이 아니다).
+
+    이벤트 검수는 `기사 → 이벤트`(기본값), 토픽 검수는 `이벤트 → 토픽`을 본다. 두 분류기의
+    로그가 같은 모양이라 키 이름만 갈아 끼우면 된다. 토픽 로그는 한 이벤트에 parent/sub 두
+    줄이 찍히는데, 뒤에 오는 줄이 최종 소속이므로 덮어쓰는 지금 동작이 스냅샷과 일치한다.
     """
     out: dict[int, float] = {}
     for line in log_text.splitlines():
@@ -83,12 +89,17 @@ def assign_distances(log_text: str) -> dict[int, float]:
             continue
         if entry.get("final_action") != "assign":
             continue
-        chosen = (entry.get("llm_decision") or {}).get("event_id")
+        chosen = (entry.get("llm_decision") or {}).get(cluster_key)
         for cand in entry.get("candidates") or []:
-            if cand.get("event_id") == chosen and cand.get("distance") is not None:
-                out[entry["article_id"]] = float(cand["distance"])
+            if cand.get(cluster_key) == chosen and cand.get("distance") is not None:
+                out[entry[member_key]] = float(cand["distance"])
                 break
     return out
+
+
+def topic_assign_distances(log_text: str) -> dict[int, float]:
+    """이벤트 → 그 이벤트가 배정될 때 선택된 토픽과의 거리."""
+    return assign_distances(log_text, member_key="event_id", cluster_key="topic_id")
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -131,25 +142,45 @@ def anchor_is_suspect(weak_count: int, known_count: int) -> bool:
     return weak_count / known_count > ANCHOR_SUSPECT_RATIO
 
 
-def select_events(events: list, distances: dict[int, float], *,
-                  targeted: int, control: int, seed: int) -> list[dict]:
+def score_topic(topic: dict, distances: dict[int, float]) -> dict:
+    """토픽 하나의 의심도를 잰다 — 구성원이 기사가 아니라 이벤트인 것만 다르다."""
+    events = topic.get("events") or []
+    weak = [
+        e for e in events
+        if distances.get(e["id"]) is not None and distances[e["id"]] >= WEAK_DISTANCE
+    ]
+    known = [distances[e["id"]] for e in events if distances.get(e["id"]) is not None]
+    return {
+        "topic_id": topic["id"],
+        "title": topic.get("title") or "",
+        "size": len(events),
+        "weak_count": len(weak),
+        "max_distance": max(known) if known else None,
+        "eligible": len(events) >= 2,
+        "anchor_suspect": anchor_is_suspect(len(weak), len(known)),
+    }
+
+
+def _pick_with_control(scored: list, *, id_key: str,
+                       targeted: int, control: int, seed: int) -> list[dict]:
     """의심 상위 N개 + 무작위 대조군 M개를 고른다.
 
-    대조군은 의심 목록에 안 뽑힌 이벤트에서만 고른다 — 겹치면 대조군의 의미가 없다.
+    대조군은 의심 목록에 안 뽑힌 것에서만 고른다 — 겹치면 대조군의 의미가 없다.
     seed 를 받아 같은 입력에 같은 대기열이 나오게 한다(재현 가능한 검수).
-    """
-    scored = [score_event(e, distances) for e in events]
-    eligible = [s for s in scored if s["eligible"]]
 
+    **대조군이 이 도구의 핵심이다.** 의심스러운 것만 검수해 만든 정답은 그 실행에 최대로
+    불리하게 편향된다(2026-08-03 에 토픽 정답을 대조군 없이 만들었다가 실제로 그렇게 됐다).
+    """
+    eligible = [s for s in scored if s["eligible"]]
     ranked = sorted(
         eligible,
         key=lambda s: (s["weak_count"], s["max_distance"] or 0, s["size"]),
         reverse=True,
     )
     picked = [s for s in ranked if s["weak_count"] > 0][:targeted]
-    picked_ids = {s["event_id"] for s in picked}
+    picked_ids = {s[id_key] for s in picked}
 
-    rest = [s for s in eligible if s["event_id"] not in picked_ids]
+    rest = [s for s in eligible if s[id_key] not in picked_ids]
     rng = random.Random(seed)
     sample = rng.sample(rest, min(control, len(rest)))
 
@@ -157,7 +188,21 @@ def select_events(events: list, distances: dict[int, float], *,
         item["selection"] = "targeted"
     for item in sample:
         item["selection"] = "control"
-    return picked + sorted(sample, key=lambda s: s["event_id"])
+    return picked + sorted(sample, key=lambda s: s[id_key])
+
+
+def select_events(events: list, distances: dict[int, float], *,
+                  targeted: int, control: int, seed: int) -> list[dict]:
+    return _pick_with_control([score_event(e, distances) for e in events],
+                              id_key="event_id", targeted=targeted,
+                              control=control, seed=seed)
+
+
+def select_topics(topics: list, distances: dict[int, float], *,
+                  targeted: int, control: int, seed: int) -> list[dict]:
+    return _pick_with_control([score_topic(t, distances) for t in topics],
+                              id_key="topic_id", targeted=targeted,
+                              control=control, seed=seed)
 
 
 def known_conflicts(article_ids: list, prior_cannot_link: set) -> list:
@@ -214,6 +259,7 @@ def build_worklist(snapshot: dict, distances: dict[int, float], *,
 
     return {
         "schema_version": SCHEMA_VERSION,
+        "unit": "event",
         "snapshot_date": snapshot.get("snapshot_date"),
         "weak_distance": WEAK_DISTANCE,
         "seed": seed,
@@ -229,12 +275,86 @@ def build_worklist(snapshot: dict, distances: dict[int, float], *,
     }
 
 
+# 토픽 검수에서 이벤트 하나를 대표할 기사 수. 전수로 쌍을 만들면 기사 20건짜리 이벤트 둘만
+# 갈라도 400쌍이 나와서 큰 토픽 하나가 지표를 통째로 지배한다.
+SAMPLE_PER_EVENT = 3
+
+
+def build_topic_worklist(snapshot: dict, distances: dict[int, float], *,
+                         targeted: int, control: int, seed: int,
+                         prior_constraints: dict | None = None) -> dict:
+    """토픽 검수 대기열. 구성원이 기사가 아니라 이벤트다.
+
+    판정 단위는 "이 이벤트가 이 토픽에 속하는가"이고, 거기서 나오는 제약은 기사 쌍이다
+    (제약 파일이 기사 id 로만 되어 있으므로). 그 변환은 topic_pairs_from_item 이 한다.
+    """
+    topics = {t["id"]: t for t in snapshot.get("topics") or []}
+    selected = select_topics(list(topics.values()), distances,
+                             targeted=targeted, control=control, seed=seed)
+
+    prior_cannot = {
+        tuple(sorted(p))
+        for p in ((prior_constraints or {}).get("topic_constraints") or {}).get(
+            "cannot_link") or []
+    }
+
+    items = []
+    for entry in selected:
+        topic = topics[entry["topic_id"]]
+        events = topic.get("events") or []
+        all_articles = [a for e in events for a in (e.get("article_ids") or [])]
+        items.append({
+            "known_conflicts": known_conflicts(all_articles, prior_cannot),
+            "topic_id": entry["topic_id"],
+            "topic_title": entry["title"],
+            "selection": entry["selection"],
+            "size": entry["size"],
+            "weak_count": entry["weak_count"],
+            "anchor_suspect": entry["anchor_suspect"],
+            # ↓ 검수자가 채우는 칸 (not_belonging 에는 **이벤트 id** 를 적는다)
+            "verdict": None,
+            "not_belonging": [],
+            "memo": "",
+            "events": [
+                {
+                    "id": e["id"],
+                    "title": e.get("title") or "",
+                    "article_count": len(e.get("article_ids") or []),
+                    "sample_article_ids": sorted(e.get("article_ids") or [])[:SAMPLE_PER_EVENT],
+                    "distance": distances.get(e["id"]),
+                }
+                for e in events
+            ],
+        })
+
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "unit": "topic",
+        "snapshot_date": snapshot.get("snapshot_date"),
+        "weak_distance": WEAK_DISTANCE,
+        "seed": seed,
+        "sample_per_event": SAMPLE_PER_EVENT,
+        "verdict_options": list(VERDICTS),
+        "how_to_fill": (
+            "각 항목의 verdict 를 셋 중 하나로 채우세요. "
+            f"'{VERDICT_CORRECT}' = 이 이벤트들은 모두 같은 토픽이다. "
+            f"'{VERDICT_EXCLUDE}' = 일부가 다른 토픽이다(not_belonging 에 **이벤트 id** 나열). "
+            f"'{VERDICT_UNSURE}' = 판단 유보(제약을 만들지 않음). "
+            "확신이 없으면 unsure 로 두세요 — 틀린 정답이 없는 정답보다 나쁩니다. "
+            "대조군(control)은 의심스럽지 않아 보여도 건너뛰지 마세요 — 편향 보정용입니다."
+        ),
+        "items": items,
+    }
+
+
 # ══════════════════════════════════════════════════════════════════════════
 # 사람이 읽는 대기열
 # ══════════════════════════════════════════════════════════════════════════
 
 
 def format_worklist_markdown(worklist: dict) -> str:
+    if worklist.get("unit") == "topic":
+        return _format_topic_markdown(worklist)
     items = worklist["items"]
     targeted = [i for i in items if i["selection"] == "targeted"]
     control = [i for i in items if i["selection"] == "control"]
@@ -316,6 +436,74 @@ def format_worklist_markdown(worklist: dict) -> str:
     return "\n".join(lines)
 
 
+def _format_topic_markdown(worklist: dict) -> str:
+    items = worklist["items"]
+    targeted = [i for i in items if i["selection"] == "targeted"]
+    control = [i for i in items if i["selection"] == "control"]
+
+    lines = [
+        "# 토픽 검수 대기열",
+        "",
+        f"- 스냅샷: {worklist.get('snapshot_date')}",
+        f"- 의심 항목 {len(targeted)}건 + 무작위 대조군 {len(control)}건",
+        f"- 약한 병합 기준: 거리 ≥ {worklist['weak_distance']}",
+        f"- 이벤트당 대표 기사 {worklist.get('sample_per_event')}건으로 제약을 만듭니다",
+        "",
+        "## 어떻게 답하나",
+        "",
+        "함께 생성된 `worklist.json` 의 `verdict` 를 채우세요.",
+        "",
+        "| verdict | 뜻 | 추가 입력 |",
+        "|---|---|---|",
+        f"| `{VERDICT_CORRECT}` | 이 이벤트들은 모두 같은 토픽이다 | — |",
+        f"| `{VERDICT_EXCLUDE}` | 일부가 다른 토픽이다 | `not_belonging` 에 **이벤트 id** |",
+        f"| `{VERDICT_UNSURE}` | 판단 유보 | — |",
+        "",
+        "> 확신이 없으면 `unsure` 로 두세요. **틀린 정답은 없는 정답보다 나쁩니다.**",
+        "> 대조군(control)은 의심스럽지 않아 보여도 건너뛰지 마세요 — 편향 보정용입니다.",
+        "",
+    ]
+
+    for section, entries in (("의심 항목", targeted), ("무작위 대조군", control)):
+        if not entries:
+            continue
+        lines += [f"## {section}", ""]
+        for order, item in enumerate(entries, 1):
+            lines += [
+                f"### {order}. T{item['topic_id']} — {item['topic_title'][:60]}",
+                "",
+                f"이벤트 {item['size']}개 / 약한 병합 {item['weak_count']}개",
+                "",
+            ]
+            if item.get("known_conflicts"):
+                pairs = ", ".join(f"{a}↔{b}" for a, b in item["known_conflicts"][:6])
+                more = len(item["known_conflicts"]) - 6
+                lines += [
+                    "> 🔒 **이전 검수에서 '다른 토픽'으로 판정된 기사 쌍이 이 안에 있습니다**"
+                    f" ({len(item['known_conflicts'])}쌍): {pairs}"
+                    + (f" 외 {more}쌍" if more > 0 else ""),
+                    "> `correct` 로 답하면 이전 판정과 모순되어 반영이 거부됩니다.",
+                    "",
+                ]
+            if item.get("anchor_suspect"):
+                lines += [
+                    "> ⚠️ 다수 이벤트가 기준에서 멀습니다 — 다수를 빼기보다 **기준 이벤트 쪽이"
+                    " 이질적인지** 먼저 보세요.",
+                    "",
+                ]
+            lines += ["| 이벤트 id | 거리 | 기사 | 제목 |", "|---|---|---|---|"]
+            for ev in sorted(item["events"], key=lambda e: -(e.get("distance") or 0)):
+                d = ev.get("distance")
+                mark = " ⚠️" if d is not None and d >= worklist["weak_distance"] else ""
+                dist = f"{d:.3f}{mark}" if d is not None else "생성"
+                lines.append(f"| E{ev['id']} | {dist} | {ev['article_count']}건 "
+                             f"| {ev['title'][:58]} |")
+            lines.append("")
+
+    lines += ["---", ""]
+    return "\n".join(lines)
+
+
 # ══════════════════════════════════════════════════════════════════════════
 # 채워진 대기열 → 제약 쌍
 # ══════════════════════════════════════════════════════════════════════════
@@ -345,8 +533,45 @@ def pairs_from_item(item: dict) -> tuple[list, list]:
     return [], []
 
 
+def topic_pairs_from_item(item: dict) -> tuple[list, list]:
+    """토픽 검수 항목 하나에서 (must_link, cannot_link) 기사 쌍을 만든다.
+
+    판정은 이벤트 단위로 하지만 제약 파일은 기사 id 로만 되어 있으므로, 이벤트를 대표
+    기사(sample_article_ids)로 펼친다. 같은 이벤트 안의 기사끼리는 이미 이벤트 제약이
+    다루므로 여기서는 **다른 이벤트 사이**의 쌍만 만든다.
+    """
+    verdict = item.get("verdict")
+    events = item.get("events") or []
+    sample = {e["id"]: list(e.get("sample_article_ids") or []) for e in events}
+
+    def cross(group_a: list, group_b: list) -> list:
+        return [sorted([x, y])
+                for ea in group_a for eb in group_b if ea != eb
+                for x in sample.get(ea, []) for y in sample.get(eb, [])
+                if x != y]
+
+    ids = [e["id"] for e in events]
+    if verdict == VERDICT_CORRECT:
+        return [sorted(p) for p in {tuple(q) for q in cross(ids, ids)}], []
+
+    if verdict == VERDICT_EXCLUDE:
+        excluded = [i for i in item.get("not_belonging") or [] if i in set(ids)]
+        kept = [i for i in ids if i not in set(excluded)]
+        cannot = {tuple(q) for q in cross(excluded, kept)}
+        # 빠진 이벤트끼리는 서로 같은 토픽일 수도 아닐 수도 있다 — 근거가 없으므로 만들지 않는다.
+        must = {tuple(q) for q in cross(kept, kept)}
+        return [list(p) for p in sorted(must)], [list(p) for p in sorted(cannot)]
+
+    return [], []
+
+
 def merge_into_constraints(constraints: dict, worklist: dict) -> dict:
-    """검수 결과를 기존 정답 파일에 합친다 (원본은 수정하지 않는다)."""
+    """검수 결과를 기존 정답 파일에 합친다 (원본은 수정하지 않는다).
+
+    worklist 의 unit 에 따라 event_constraints / topic_constraints 중 한쪽에 들어간다.
+    """
+    if worklist.get("unit") == "topic":
+        return _merge_topic(constraints, worklist)
     merged = json.loads(json.dumps(constraints))
     ec = merged.setdefault("event_constraints", {})
     existing_must = {tuple(sorted(p)) for p in ec.get("must_link") or []}
@@ -388,6 +613,57 @@ def merge_into_constraints(constraints: dict, worklist: dict) -> dict:
 
     merged["_review_rounds"] = (merged.get("_review_rounds") or []) + [{
         "schema_version": worklist.get("schema_version"),
+        "unit": "event",
+        "snapshot_date": worklist.get("snapshot_date"),
+        "verdicts": counts,
+        "added_must_link": len(added_must - existing_must),
+        "added_cannot_link": len(added_cannot - existing_cannot),
+    }]
+    return merged
+
+
+def _merge_topic(constraints: dict, worklist: dict) -> dict:
+    """토픽 검수 결과를 topic_constraints 에 합친다."""
+    merged = json.loads(json.dumps(constraints))
+    tc = merged.setdefault("topic_constraints", {})
+    existing_must = {tuple(sorted(p)) for p in tc.get("must_link") or []}
+    existing_cannot = {tuple(sorted(p)) for p in tc.get("cannot_link") or []}
+
+    added_must, added_cannot = set(), set()
+    counts = {v: 0 for v in VERDICTS}
+    counts["(미기입)"] = 0
+    source_of = {}
+
+    for item in worklist.get("items") or []:
+        verdict = item.get("verdict")
+        counts[verdict if verdict in counts else "(미기입)"] += 1
+        must, cannot = topic_pairs_from_item(item)
+        for pair in must:
+            source_of.setdefault(tuple(pair), item.get("topic_id"))
+        added_must.update(tuple(p) for p in must)
+        added_cannot.update(tuple(p) for p in cannot)
+
+    conflicts = sorted((added_cannot | existing_cannot) & (added_must | existing_must))
+    if conflicts:
+        by_topic = {}
+        for pair in conflicts:
+            by_topic.setdefault(source_of.get(pair, "(출처 불명)"), []).append(pair)
+        detail = "; ".join(
+            f"{f'T{tid}' if tid is not None else '(출처 불명)'}: "
+            f"{len(pairs)}쌍(예 {pairs[0][0]}↔{pairs[0][1]})"
+            for tid, pairs in sorted(by_topic.items(), key=lambda kv: str(kv[0]))[:5]
+        )
+        raise ValueError(
+            f"모순: must-link 와 cannot-link 에 동시에 들어가는 쌍이 {len(conflicts)}개 "
+            f"있습니다 — {detail}. 해당 토픽의 verdict 를 다시 보세요."
+        )
+
+    tc["must_link"] = [list(p) for p in sorted(existing_must | added_must)]
+    tc["cannot_link"] = [list(p) for p in sorted(existing_cannot | added_cannot)]
+
+    merged["_review_rounds"] = (merged.get("_review_rounds") or []) + [{
+        "schema_version": worklist.get("schema_version"),
+        "unit": "topic",
         "snapshot_date": worklist.get("snapshot_date"),
         "verdicts": counts,
         "added_must_link": len(added_must - existing_must),
@@ -407,11 +683,18 @@ def _load(path: str) -> dict:
 
 def cmd_build(args) -> None:
     snapshot = _load(args.snapshot)
-    distances = assign_distances(Path(args.log).read_text(encoding="utf-8"))
+    log_text = Path(args.log).read_text(encoding="utf-8")
     prior = _load(args.constraints) if args.constraints else None
-    worklist = build_worklist(snapshot, distances, targeted=args.targeted,
-                              control=args.control, seed=args.seed,
-                              prior_constraints=prior)
+    is_topic = args.unit == "topic"
+
+    if is_topic:
+        worklist = build_topic_worklist(
+            snapshot, topic_assign_distances(log_text), targeted=args.targeted,
+            control=args.control, seed=args.seed, prior_constraints=prior)
+    else:
+        worklist = build_worklist(
+            snapshot, assign_distances(log_text), targeted=args.targeted,
+            control=args.control, seed=args.seed, prior_constraints=prior)
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -421,10 +704,12 @@ def cmd_build(args) -> None:
     md_path.write_text(format_worklist_markdown(worklist), encoding="utf-8")
 
     items = worklist["items"]
-    articles = sum(i["size"] for i in items)
+    members = sum(i["size"] for i in items)
     targeted = sum(1 for i in items if i["selection"] == "targeted")
-    print(f"검수 대기열 {len(items)}건 (의심 {targeted} + 대조군 {len(items) - targeted})")
-    print(f"  기사 {articles}건, 약한 병합 {sum(i['weak_count'] for i in items)}건")
+    unit_label = "토픽" if is_topic else "이벤트"
+    member_label = "이벤트" if is_topic else "기사"
+    print(f"{unit_label} 검수 대기열 {len(items)}건 (의심 {targeted} + 대조군 {len(items) - targeted})")
+    print(f"  {member_label} {members}건, 약한 병합 {sum(i['weak_count'] for i in items)}건")
     conflicted = [i for i in items if i.get("known_conflicts")]
     if conflicted:
         print(f"  이전 검수와 충돌 가능 항목 {len(conflicted)}건 — 대기열에 표시했습니다")
@@ -432,8 +717,10 @@ def cmd_build(args) -> None:
         print("  (--constraints 를 주면 이전 검수와 충돌할 항목을 미리 표시합니다)")
     print(f"  사람용: {md_path}")
     print(f"  입력용: {json_path}")
+    # 토픽은 이벤트를 대표 기사 N건으로 펼치므로 쌍이 N² 배로 불어난다
+    scale = SAMPLE_PER_EVENT ** 2 if is_topic else 1
     print("\n  전부 exclude 로 판정될 경우 최대 생성 가능한 cannot-link 쌍: "
-          f"{sum(i['weak_count'] * (i['size'] - i['weak_count']) for i in items):,}쌍")
+          f"{sum(i['weak_count'] * (i['size'] - i['weak_count']) for i in items) * scale:,}쌍")
 
 
 def cmd_merge(args) -> None:
@@ -457,11 +744,12 @@ def cmd_merge(args) -> None:
     Path(args.out).write_text(
         json.dumps(merged, ensure_ascii=False, indent=2), encoding="utf-8")
     round_info = merged["_review_rounds"][-1]
-    before_c = len(constraints.get("event_constraints", {}).get("cannot_link") or [])
-    after_c = len(merged["event_constraints"]["cannot_link"])
-    before_m = len(constraints.get("event_constraints", {}).get("must_link") or [])
-    after_m = len(merged["event_constraints"]["must_link"])
-    print(f"검수 {filled}건 반영: {round_info['verdicts']}")
+    key = "topic_constraints" if worklist.get("unit") == "topic" else "event_constraints"
+    before_c = len(constraints.get(key, {}).get("cannot_link") or [])
+    after_c = len(merged[key]["cannot_link"])
+    before_m = len(constraints.get(key, {}).get("must_link") or [])
+    after_m = len(merged[key]["must_link"])
+    print(f"검수 {filled}건 반영({round_info.get('unit')}): {round_info['verdicts']}")
     print(f"  must-link   {before_m:,} → {after_m:,}쌍")
     print(f"  cannot-link {before_c:,} → {after_c:,}쌍")
     print(f"  저장: {args.out}")
@@ -472,6 +760,8 @@ def main() -> None:
     sub = parser.add_subparsers(dest="command", required=True)
 
     b = sub.add_parser("build", help="분류 결과에서 검수 대기열을 만든다")
+    b.add_argument("--unit", choices=("event", "topic"), default="event",
+                   help="검수 단위. event=이벤트 안의 기사, topic=토픽 안의 이벤트 (기본: event)")
     b.add_argument("--snapshot", required=True)
     b.add_argument("--log", required=True)
     b.add_argument("--out-dir", default="eval/data/review")
