@@ -268,6 +268,8 @@ def print_report(result: dict) -> None:
     print(f"  정답 사건 {ct['gold_events']}개 중 여러 {unit_label}로 흩어진 것 {ct['over_split']}개 (과분할)")
     print(f"    한 {unit_label}가 담은 정답 사건 수: {ct['golds_per_cluster']}")
     print(f"    한 사건이 흩어진 {unit_label} 수:   {ct['clusters_per_gold']}")
+    print("  ※ 정답 사건은 must 로만 만든다. must 가 없는 기사(cannot 만 걸린 기사)는 여기 안 잡히므로,")
+    print("    과병합의 실제 크기는 위 개수가 아니라 [2]의 cannot 충족률로 읽어야 한다.")
 
     print("\n[4] 기사를 옮겨서 고칠 수 있나")
     print(f"  위반 {mt['violated_pairs']}쌍을 상대 군집으로 옮기면 "
