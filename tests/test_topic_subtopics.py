@@ -1124,15 +1124,16 @@ class SubtopicThresholdSettingsTests(unittest.TestCase):
             self.assertEqual(s.SUBTOPIC_MODE, "llm")
 
     def test_sim_threshold_default_and_override(self):
-        """SUBTOPIC_SIM_THRESHOLD 기본 0.50(실데이터 실측), env 오버라이드 가능.
+        """SUBTOPIC_SIM_THRESHOLD 기본 0.55(실데이터 실측), env 오버라이드 가능.
 
-        0.65 였던 것을 2026-08-03 실측(run t003)으로 낮췄다. 실데이터에서는 같은 토픽 안
-        이벤트 쌍의 유사도 최대가 0.655 라, 0.65 에서는 서브토픽 38개 중 37개가 이벤트
-        1개짜리가 됐다(R-S1 97.4%). 근거는 settings.py 주석에 있다.
+        0.65 → 0.50 → 0.55 로 옮겨왔다. 0.65 는 실데이터에서 서브토픽 38개 중 37개를
+        이벤트 1개짜리로 만들었고(R-S1 97.4%), 0.50 은 반대로 '트럼프'만 공통인 이벤트
+        4개를 한 토픽에 묶었다. 토픽 cannot 정답 144쌍으로 재보고 0.55 를 채택했다.
+        근거는 settings.py 주석에 있다.
         """
         os.environ.pop("TOPIC_SUBTOPIC_SIM_THRESHOLD", None)
         s = self._reload_settings()
-        self.assertAlmostEqual(s.SUBTOPIC_SIM_THRESHOLD, 0.50)
+        self.assertAlmostEqual(s.SUBTOPIC_SIM_THRESHOLD, 0.55)
         with patch.dict(os.environ, {"TOPIC_SUBTOPIC_SIM_THRESHOLD": "0.65"}):
             s = self._reload_settings()
             self.assertAlmostEqual(s.SUBTOPIC_SIM_THRESHOLD, 0.65)
