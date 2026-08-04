@@ -21,6 +21,25 @@ TOP_K = int(os.environ.get("EVENT_CANDIDATE_LIMIT", "12"))
 DISTANCE_THRESHOLD = float(os.environ.get("EVENT_DISTANCE_THRESHOLD", "0.40"))
 # 후보검색 시간 윈도우(일). SEARCH_CANDIDATE_EVENTS_SQL의 updated_at 기준 조건에 쓰인다.
 CANDIDATE_WINDOW_DAYS = int(os.environ.get("EVENT_CANDIDATE_WINDOW_DAYS", "2"))
+
+# 후보가 이 개수 미만이면 거리만 FALLBACK_DISTANCE_THRESHOLD 로 넓혀 한 번 더 찾는다.
+# FALLBACK 이 0 이거나 DISTANCE_THRESHOLD 이하면 비활성(기본).
+#
+# 왜 필요한가: must-link 위반의 A유형("정답 이벤트가 후보에 아예 없었다")은 거리 임계값의
+# 직접적인 함수다 — 로컬 실측에서 0.50→11건, 0.40→65건, 0.35→142건이었다. 그런데 거리를
+# 완화하면 과병합이 늘어(0.50 에서 cannot 충족률 7.4%) 같은 레버의 양면이라 임계값 하나로는
+# 둘 다 잡을 수 없다.
+#
+# A유형 65건을 뜯어보니 후보가 0개인 경우가 28건, 1~11개가 37건이고 **상한(12)에 잘린 것은
+# 0건**이었다. 많이 찾아서 잘린 게 아니라 아무것도 못 찾은 것이므로 EVENT_CANDIDATE_LIMIT
+# 상향은 무의미하다. 그래서 "후보가 부족할 때만" 거리를 넓힌다 — 정상적으로 후보가 잡히는
+# 경우는 건드리지 않으므로 과병합을 늘리지 않는다.
+#
+# 넓혀 온 후보도 결국 LLM 배정 판단과 ASSIGN_SCORE_THRESHOLD 가드를 그대로 통과해야 한다.
+# 하네스로 재본 뒤 켜는 것을 전제로 기본값은 비활성이다:
+#   `--set EVENT_FALLBACK_DISTANCE_THRESHOLD=0.50`
+FALLBACK_DISTANCE_THRESHOLD = float(os.environ.get("EVENT_FALLBACK_DISTANCE_THRESHOLD", "0"))
+FALLBACK_MIN_CANDIDATES = int(os.environ.get("EVENT_FALLBACK_MIN_CANDIDATES", "2"))
 ASSIGN_SCORE_THRESHOLD = float(os.environ.get("EVENT_ASSIGN_SCORE_THRESHOLD", "0.80"))
 
 # 이벤트 벡터를 언제 갱신할지.

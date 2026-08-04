@@ -22,6 +22,8 @@ from event_classifier.settings import (
     DISTANCE_THRESHOLD,
     EMBEDDING_UPDATE_CENTROID,
     EMBEDDING_UPDATE_MODE,
+    FALLBACK_DISTANCE_THRESHOLD,
+    FALLBACK_MIN_CANDIDATES,
     LLM_MODEL,
     TOP_K,
 )
@@ -73,6 +75,19 @@ def _load_decision_score(decision: dict) -> float:
         return 0.0
 
 
+def should_widen_search(candidate_count: int) -> bool:
+    """후보가 부족할 때만 거리를 넓혀 한 번 더 찾을지 판정한다.
+
+    거리 임계값을 통째로 완화하면 과병합이 늘지만(0.50 에서 cannot 충족률 7.4%), 후보가
+    아예 안 잡힌 경우만 넓히면 정상 케이스는 그대로라 과병합이 늘지 않는다.
+    FALLBACK_DISTANCE_THRESHOLD 가 0 이거나 기본 임계값 이하면 비활성이다.
+    """
+    return (
+        FALLBACK_DISTANCE_THRESHOLD > DISTANCE_THRESHOLD
+        and candidate_count < FALLBACK_MIN_CANDIDATES
+    )
+
+
 def build_decision_log(
     *,
     article_id: int,
@@ -82,6 +97,7 @@ def build_decision_log(
     llm_decision: dict,
     overridden: bool,
     final_action: str,
+    widened: bool = False,
 ) -> dict:
     """기사 1건의 이벤트 배정 판단을 진단 가능한 형태로 직렬화한다.
 
@@ -113,6 +129,8 @@ def build_decision_log(
         "llm_decision": llm_decision,
         "overridden": overridden,
         "final_action": final_action,
+        # 후보가 부족해 거리를 넓혀 재검색했는가 — A유형 진단에서 이 케이스를 갈라 보려고 남긴다
+        "widened_search": widened,
     }
 
 
@@ -331,6 +349,18 @@ def process_event_classification(
                     TOP_K,
                     CANDIDATE_WINDOW_DAYS,
                 )
+                widened = should_widen_search(len(candidates))
+                if widened:
+                    # 거리만 넓힌다 — 시간창과 개수 상한은 그대로다. A유형 65건 중 상한에
+                    # 잘린 것이 0건이었으므로 넓혀야 할 것은 거리뿐이다.
+                    candidates = events.search_candidate_events(
+                        conn,
+                        article_query_embedding,
+                        str(art["published_at"]),
+                        FALLBACK_DISTANCE_THRESHOLD,
+                        TOP_K,
+                        CANDIDATE_WINDOW_DAYS,
+                    )
                 article_embedding = to_vector_literal(embed_passage(event_embedding_text))
                 if candidates:
                     decision = _parse_json(
@@ -461,6 +491,7 @@ def process_event_classification(
                             llm_decision=llm_decision,
                             overridden=overridden,
                             final_action=action,
+                            widened=widened,
                         ),
                         ensure_ascii=False,
                     )

@@ -171,5 +171,60 @@ class TestSerializable(unittest.TestCase):
         self.assertEqual(json.loads(dumped)["candidate_count"], 12)
 
 
+# ══════════════════════════════════════════════════════════════════════════
+# 후보 부족 시 거리 넓히기 (2단계 검색)
+# ══════════════════════════════════════════════════════════════════════════
+
+
+class TestShouldWidenSearch(unittest.TestCase):
+    """거리 임계값을 통째로 완화하면 과병합이 늘지만, 후보가 안 잡힌 경우만 넓히면
+    정상 케이스는 그대로다. 그 '부족할 때만'이 지켜지는지 고정한다."""
+
+    def _widen(self, count, *, fallback, base=0.40, minimum=2) -> bool:
+        from unittest.mock import patch
+
+        from event_classifier import pipeline
+
+        with patch.object(pipeline, "FALLBACK_DISTANCE_THRESHOLD", fallback), \
+             patch.object(pipeline, "DISTANCE_THRESHOLD", base), \
+             patch.object(pipeline, "FALLBACK_MIN_CANDIDATES", minimum):
+            return pipeline.should_widen_search(count)
+
+    def test_disabled_by_default_value_zero(self):
+        """기본값 0 은 비활성 — 후보가 하나도 없어도 재검색하지 않는다."""
+        self.assertFalse(self._widen(0, fallback=0.0))
+
+    def test_fallback_not_greater_than_base_is_disabled(self):
+        """넓히는 값이 기본 임계값 이하면 넓히는 의미가 없다(오히려 좁아진다)."""
+        self.assertFalse(self._widen(0, fallback=0.40))
+        self.assertFalse(self._widen(0, fallback=0.30))
+
+    def test_widens_when_candidates_are_scarce(self):
+        self.assertTrue(self._widen(0, fallback=0.50))
+        self.assertTrue(self._widen(1, fallback=0.50))
+
+    def test_does_not_widen_when_enough_candidates(self):
+        """정상적으로 후보가 잡히면 건드리지 않는다 — 과병합을 늘리지 않는 핵심."""
+        self.assertFalse(self._widen(2, fallback=0.50))
+        self.assertFalse(self._widen(12, fallback=0.50))
+
+    def test_minimum_is_exclusive_boundary(self):
+        self.assertTrue(self._widen(2, fallback=0.50, minimum=3))
+        self.assertFalse(self._widen(3, fallback=0.50, minimum=3))
+
+
+class TestWidenedFlagInLog(unittest.TestCase):
+    def test_defaults_to_false(self):
+        self.assertFalse(_log([])["widened_search"])
+
+    def test_records_when_widened(self):
+        log = build_decision_log(
+            article_id=1, main_event="사건", result="assigned",
+            candidates=[], llm_decision={}, overridden=False,
+            final_action="create", widened=True,
+        )
+        self.assertTrue(log["widened_search"])
+
+
 if __name__ == "__main__":
     unittest.main()
