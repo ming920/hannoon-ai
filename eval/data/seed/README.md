@@ -9,6 +9,7 @@
 | `events_2026-07-27.sql` | 222 / 722 / 722 | 1.5MB | **이벤트 데이터.** 토픽 분류 담당자용 — 아래 참고 |
 | `articles_test_target_2026-07-20.sql` | 313 | 1.4MB | 부분집합. 아래 경고 참고 |
 | `test_target_article_ids_2026-07-20.txt` | 313 | 1.8KB | 위 부분집합의 기사 id 목록 |
+| `subtopics_t5c_2026-08-25.sql` | 5 / 20 / 68 | 18KB | **서브토픽 v2 결과.** 실험 결과를 눈으로 보려면 — 아래 참고 |
 
 ## ⚠️ 부분집합(313건)만으로는 정답을 검증할 수 없다
 
@@ -56,6 +57,35 @@ python scripts/apply_local_seed.py --file eval/data/seed/events_2026-07-27.sql  
 ```
 
 넣고 나면 기사 5건 이상인 이벤트 **38건**이 토픽 분류 대상이 된다.
+
+## 서브토픽 v2 결과 (`subtopics_t5c_2026-08-25.sql`) — 실험 결과를 눈으로 보려면
+
+`eval/results/` 는 gitignore 라 실행 결과가 저장소로 나가지 않는다. 서브토픽이 실제로 어떻게
+묶였는지 팀에서 확인하려면 이 파일을 로컬 DB 에 넣는 게 가장 빠르다.
+
+| 테이블 | 행 수 |
+|---|---|
+| `topics` | 5 (실험용 재구성 토픽, id 90001~) |
+| `subtopics` | 20 |
+| `subtopic_events` | 68 (이벤트당 1.26 — 한 이벤트가 여러 서브토픽에 들어간다) |
+
+```bash
+python scripts/apply_local_seed.py --replace                                          # 1) 기사
+python scripts/apply_local_seed.py --file eval/data/seed/events_2026-07-27.sql         # 2) 이벤트
+python scripts/apply_local_seed.py --file eval/data/seed/subtopics_t5c_2026-08-25.sql  # 3) 서브토픽
+```
+
+알아둘 것:
+
+- **`subtopics` / `subtopic_events` 는 아직 마이그레이션에 없는 제안 스키마다**
+  (`docs/subtopic_v2_schema_proposal.md`). 이 파일이 `CREATE TABLE IF NOT EXISTS` 로 직접 만든다.
+- **토픽 5개는 프로덕션 토픽이 아니다.** 서브토픽 로직만 따로 보려고 이벤트를 다시 묶은 것이다
+  — 토픽이 잡탕이면 서브토픽도 잡탕이 되어 원인을 격리할 수 없다.
+- `events.topic_id` 를 이 토픽들로 UPDATE 한다. 시드는 전부 NULL 이라 덮어쓸 것이 없다.
+- 파일 끝에 확인 쿼리(다중 귀속, 단독 이벤트, 커버리지 비율)와 되돌리기 SQL 이 주석으로 있다.
+
+프롬프트를 어떻게 짰는지는 `docs/subtopic_prompt_guide.md`, 실험 이력과 지표는
+`docs/subtopic_design_v2.md` 를 볼 것. 이 결과의 전수 감사 적합률은 69.1%(47/68쌍)다.
 
 ## 적용
 
