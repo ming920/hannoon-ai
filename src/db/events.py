@@ -73,7 +73,7 @@ SELECT id, category, title, core_content, summary, article_count,
        (embedding <=> ?::vector) AS distance
 FROM events
 WHERE embedding IS NOT NULL
-  AND (updated_at + INTERVAL '2 day' >= ?)
+  AND (updated_at + (?::int * INTERVAL '1 day') >= ?)
   AND (embedding <=> ?::vector) <= ?
 ORDER BY distance ASC
 LIMIT ?
@@ -99,6 +99,36 @@ RETURNING id
 INSERT_EVENT_ARTICLE_MAP_SQL = """
 INSERT INTO event_articles (event_id, article_id, reason)
 VALUES (?, ?, ?)
+"""
+
+# 이벤트 벡터를 구성원 기사 임베딩의 평균(중심)으로 다시 맞춘다.
+#
+# 기본 동작에서 이벤트 벡터는 create_new_event 가 심은 **첫 기사의 임베딩**에 영원히 고정된다.
+# 그래서 "이벤트와의 거리"는 실제로는 "먼저 도착한 기사 한 건과의 거리"이고, 이벤트가 커질수록
+# 대표성이 떨어진다. 로컬 실측(기사 722건 / 이벤트 177개):
+#
+#     이벤트 크기    구성원→앵커 평균   구성원→중심 평균
+#     3~5건            0.224            0.236
+#     6~14건           0.217            0.156
+#     15건 이상        0.267            0.149   ← 앵커가 1.8배 멀다
+#
+# updated_at 은 건드리지 않는다. 같은 트랜잭션의 update_event_summary 가 이미 갱신하고,
+# 여기서 또 만지면 후보검색 시간 윈도우에 의도치 않은 영향을 준다.
+#
+# Postgres 전용이다(UPDATE ... FROM + pgvector AVG). 이벤트 분류 자체가 pgvector 를
+# 요구하므로 SQLite 경로에서는 호출되지 않는다.
+RECENTER_EVENT_EMBEDDING_SQL = """
+UPDATE events
+SET embedding = sub.centroid
+FROM (
+    SELECT AVG(a.embedding) AS centroid
+    FROM event_articles ea
+    JOIN articles a ON a.id = ea.article_id
+    WHERE ea.event_id = ?
+      AND a.embedding IS NOT NULL
+) AS sub
+WHERE events.id = ?
+  AND sub.centroid IS NOT NULL
 """
 
 
@@ -148,11 +178,19 @@ def search_candidate_events(
     published_at_str: str,
     max_distance: float,
     top_k: int,
+    window_days: int,
 ) -> list[dict]:
     """기사 임베딩과 가까운 기존 이벤트 후보를 pgvector 거리순으로 가져온다."""
     return conn.query(
         SEARCH_CANDIDATE_EVENTS_SQL,
-        (embedding_literal, published_at_str, embedding_literal, max_distance, top_k),
+        (
+            embedding_literal,
+            window_days,
+            published_at_str,
+            embedding_literal,
+            max_distance,
+            top_k,
+        ),
     )
 
 
@@ -199,3 +237,16 @@ def link_article_to_event(
 ) -> None:
     """기사와 이벤트를 매핑 테이블에 연결한다."""
     conn.execute(INSERT_EVENT_ARTICLE_MAP_SQL, (event_id, article_id, reason))
+
+
+def recenter_event_embedding(conn, event_id: int) -> None:
+    """이벤트 벡터를 현재 구성원 기사들의 중심으로 다시 맞춘다.
+
+    **반드시 link_article_to_event 뒤에 호출해야 한다** — 새 기사가 매핑에 들어가 있어야
+    중심에 반영된다. 임베딩이 있는 구성원이 하나도 없으면 아무것도 바꾸지 않는다(SQL의
+    centroid IS NOT NULL 조건).
+
+    embedding_text 는 건드리지 않는다. 그 값은 토픽 분류가 cause/result 를 뽑는 **텍스트**
+    입력이라 벡터와 용도가 다르다.
+    """
+    conn.execute(RECENTER_EVENT_EMBEDDING_SQL, (event_id, event_id))

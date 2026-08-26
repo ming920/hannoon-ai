@@ -1,0 +1,368 @@
+{
+ "schema_version": "worklist-v1",
+ "unit": "topic",
+ "snapshot_date": "2026-08-03T18:16:47",
+ "weak_distance": 0.4,
+ "seed": 20260727,
+ "sample_per_event": 3,
+ "verdict_options": [
+  "correct",
+  "exclude",
+  "unsure"
+ ],
+ "how_to_fill": "각 항목의 verdict 를 셋 중 하나로 채우세요. 'correct' = 이 이벤트들은 모두 같은 토픽이다. 'exclude' = 일부가 다른 토픽이다(not_belonging 에 **이벤트 id** 나열). 'unsure' = 판단 유보(제약을 만들지 않음). 확신이 없으면 unsure 로 두세요 — 틀린 정답이 없는 정답보다 나쁩니다. 대조군(control)은 의심스럽지 않아 보여도 건너뛰지 마세요 — 편향 보정용입니다.",
+ "items": [
+  {
+   "known_conflicts": [],
+   "topic_id": 1632,
+   "topic_title": "트럼프 대통령, 폭염 속 건국 기념행사 강행 및",
+   "selection": "targeted",
+   "size": 4,
+   "weak_count": 4,
+   "anchor_suspect": true,
+   "verdict": "exclude",
+   "not_belonging": [
+    1629,
+    1656,
+    1675
+   ],
+   "memo": "[claude 파생판정] 건국 250주년 기념행사(E1625)만 남긴다. 네타냐후 정상회담·FIFA 회장 통화·나토 무기 세일즈는 공통점이 '트럼프'뿐인 인물 중심 과병합.",
+   "events": [
+    {
+     "id": 1625,
+     "title": "트럼프 대통령이 4일 워싱턴 DC 내셔널 몰에서 섭씨 40도 안팎의 폭염 속에서도 아주 긴 연설을 할 것이라고 예고했다.",
+     "article_count": 14,
+     "sample_article_ids": [
+      2617,
+      2619,
+      2625
+     ],
+     "distance": 0.7079
+    },
+    {
+     "id": 1629,
+     "title": "트럼프-네타냐후 정상회담 합의",
+     "article_count": 5,
+     "sample_article_ids": [
+      2604,
+      3171,
+      4158
+     ],
+     "distance": 0.6836
+    },
+    {
+     "id": 1656,
+     "title": "도널드 트럼프 미국 대통령이 1월 1일 월드컵 32강전 직후 잔니 인판티노 FIFA 회장에게 전화를 걸어 미국 축구대표팀 공격수 폴라린 발로건의 출전 정지 징계 재검토를 요청했다.",
+     "article_count": 10,
+     "sample_article_ids": [
+      2574,
+      2588,
+      2592
+     ],
+     "distance": 0.4561
+    },
+    {
+     "id": 1675,
+     "title": "트럼프, 나토 정상회담서 무기 세일즈 압박",
+     "article_count": 11,
+     "sample_article_ids": [
+      2589,
+      2878,
+      3150
+     ],
+     "distance": 0.7077
+    }
+   ]
+  },
+  {
+   "known_conflicts": [],
+   "topic_id": 1623,
+   "topic_title": "반도체 하락과 레버리지 ETF 위험",
+   "selection": "targeted",
+   "size": 4,
+   "weak_count": 4,
+   "anchor_suspect": true,
+   "verdict": "exclude",
+   "not_belonging": [
+    1634,
+    1693
+   ],
+   "memo": "[claude 파생판정] 코스피 반도체 급락(E1607)과 삼성전자 실적(E1690)은 같은 반도체 시황으로 묶일 수 있지만, 레버리지 ETF 유동성 규제와 SK하이닉스 나스닥 상장은 별개 사안.",
+   "events": [
+    {
+     "id": 1607,
+     "title": "2024년 4월 2일 코스피지수는 반도체 지수 급락 여파로 전거래일 대비 5.34% 하락하며 8000선이 무너졌고, 거래소는 매도 사이드카를 발동했다.",
+     "article_count": 13,
+     "sample_article_ids": [
+      2367,
+      2394,
+      2408
+     ],
+     "distance": 0.6079
+    },
+    {
+     "id": 1634,
+     "title": "금융당국이 단일종목 레버리지 ETF의 괴리율 확대 사고를 막기 위해 유동성공급자(LP) 관리 강화 방안을 검토 중이다.",
+     "article_count": 5,
+     "sample_article_ids": [
+      177,
+      2324,
+      2377
+     ],
+     "distance": 0.6067
+    },
+    {
+     "id": 1690,
+     "title": "삼성전자, 2분기 역대 최대 실적 달성",
+     "article_count": 18,
+     "sample_article_ids": [
+      2383,
+      2678,
+      2909
+     ],
+     "distance": 0.459
+    },
+    {
+     "id": 1693,
+     "title": "SK하이닉스, 나스닥 상장 예정",
+     "article_count": 9,
+     "sample_article_ids": [
+      2386,
+      2965,
+      3338
+     ],
+     "distance": 0.4736
+    }
+   ]
+  },
+  {
+   "known_conflicts": [],
+   "topic_id": 1626,
+   "topic_title": "배재고 야구부 조롱 발언 논란",
+   "selection": "targeted",
+   "size": 3,
+   "weak_count": 3,
+   "anchor_suspect": true,
+   "verdict": "exclude",
+   "not_belonging": [
+    1668
+   ],
+   "memo": "[claude 파생판정] 청룡기 조롱 논란(E1616)과 그에 대한 조국 발언(E1648)은 한 흐름이다. 이병태 부위원장 자진사퇴는 다른 사안(이벤트 검수에서도 분리했다).",
+   "events": [
+    {
+     "id": 1616,
+     "title": "2026년 7월1일, 대한야구소프트볼협회는 청룡기 전국고교야구에서 광주일고 선수를 조롱하며 '스타벅스 가야지'라고 외친 배재고 야구부에 출전 정지 6개월을 결정했다.",
+     "article_count": 22,
+     "sample_article_ids": [
+      9,
+      2342,
+      2509
+     ],
+     "distance": 0.6886
+    },
+    {
+     "id": 1648,
+     "title": "조국 전 대표가 5일 페이스북에 글을 올려 일베는 표준어 뒤에 기계적으로 '노'를 붙여 사용한다고 설명하며 영남 사투리와 일베의 '노' 사용을 구별해야 한다고 주장했다.",
+     "article_count": 5,
+     "sample_article_ids": [
+      5,
+      3231,
+      3983
+     ],
+     "distance": 0.6474
+    },
+    {
+     "id": 1668,
+     "title": "이병태 규제합리화위원회 부위원장이 5월 6일 청와대의 사퇴 권고에 따라 자진 사퇴했다.",
+     "article_count": 13,
+     "sample_article_ids": [
+      2311,
+      2320,
+      2848
+     ],
+     "distance": 0.6042
+    }
+   ]
+  },
+  {
+   "known_conflicts": [],
+   "topic_id": 1633,
+   "topic_title": "검찰청 폐지와 선관위 개혁 논의",
+   "selection": "targeted",
+   "size": 5,
+   "weak_count": 3,
+   "anchor_suspect": false,
+   "verdict": "exclude",
+   "not_belonging": [
+    1655,
+    1691
+   ],
+   "memo": "[claude 파생판정] 검찰청 폐지(E1626)와 선관위 특검·감사(E1636·E1659)는 '수사·선거 제도 개혁'으로 묶을 여지가 있어 남긴다. 정보통신망법 시행과 한동훈 징계는 그 범위 밖.",
+   "events": [
+    {
+     "id": 1626,
+     "title": "더불어민주당이 2024년 10월 검찰청 폐지와 중대범죄수사청 출범을 앞두고 형사소송법 개정을 통해 검찰의 보완수사권을 전면 폐지하는 입법을 추진한다.",
+     "article_count": 9,
+     "sample_article_ids": [
+      2286,
+      2291,
+      2348
+     ],
+     "distance": 0.5583
+    },
+    {
+     "id": 1636,
+     "title": "민주당, 선관위 특검법 제출 예정",
+     "article_count": 10,
+     "sample_article_ids": [
+      12,
+      2296,
+      2339
+     ],
+     "distance": 0.1708
+    },
+    {
+     "id": 1655,
+     "title": "정보통신망법 개정안이 7일 시행되었다.",
+     "article_count": 16,
+     "sample_article_ids": [
+      2307,
+      2337,
+      2988
+     ],
+     "distance": 0.5553
+    },
+    {
+     "id": 1659,
+     "title": "감사원, 선관위 현장 감사 착수",
+     "article_count": 7,
+     "sample_article_ids": [
+      2332,
+      3002,
+      3028
+     ],
+     "distance": 0.3152
+    },
+    {
+     "id": 1691,
+     "title": "국민의힘 중앙윤리위원회가 6일 한동훈 무소속 의원의 선거 지원 행위를 비롯한 당내 해당행위에 대한 징계 심의를 착수했다.",
+     "article_count": 6,
+     "sample_article_ids": [
+      3001,
+      3631,
+      4021
+     ],
+     "distance": 0.5241
+    }
+   ]
+  },
+  {
+   "known_conflicts": [],
+   "topic_id": 1621,
+   "topic_title": "홈플러스 기업회생절차 폐지와 파산 위기",
+   "selection": "control",
+   "size": 2,
+   "weak_count": 1,
+   "anchor_suspect": false,
+   "verdict": "correct",
+   "not_belonging": [],
+   "memo": "[claude 파생판정] 회생절차 폐지와 카드대금 지급보류 요구는 홈플러스 사태의 두 국면. 같은 토픽.",
+   "events": [
+    {
+     "id": 1588,
+     "title": "2025년 3월 홈플러스는 MBK파트너스의 차입매수(LBO) 방식 인수 후 부채비율이 1400%를 초과하며 서울회생법원에 기업회생절차(법정관리)를 신청했다.",
+     "article_count": 11,
+     "sample_article_ids": [
+      2672,
+      3062,
+      3081
+     ],
+     "distance": null
+    },
+    {
+     "id": 1684,
+     "title": "홈플러스가 2024년 3월부터 일부 카드사의 매출 대금 지급 보류를 즉각 철회해야 한다고 요구했다.",
+     "article_count": 6,
+     "sample_article_ids": [
+      3067,
+      3126,
+      3491
+     ],
+     "distance": 0.5407
+    }
+   ]
+  },
+  {
+   "known_conflicts": [],
+   "topic_id": 1634,
+   "topic_title": "민주당 당권 경쟁과 진영 갈등",
+   "selection": "control",
+   "size": 2,
+   "weak_count": 2,
+   "anchor_suspect": false,
+   "verdict": "correct",
+   "not_belonging": [],
+   "memo": "[claude 파생판정] 당권 주자 워크숍과 계엄 표결 불참 의혹 공방 모두 민주당 내부 당권·진영 갈등.",
+   "events": [
+    {
+     "id": 1627,
+     "title": "민주당 당권 주자 워크숍 참석",
+     "article_count": 10,
+     "sample_article_ids": [
+      2287,
+      2309,
+      2322
+     ],
+     "distance": 0.5516
+    },
+    {
+     "id": 1700,
+     "title": "김민석 전 국무총리는 7일 친청계 의원들의 '계엄 해제 표결 불참' 의혹에 대해 '대장동 때를 보는 듯하다'며 허위사실 유포에 책임을 지라고 반박했다.",
+     "article_count": 11,
+     "sample_article_ids": [
+      2302,
+      2991,
+      3190
+     ],
+     "distance": 0.4282
+    }
+   ]
+  },
+  {
+   "known_conflicts": [],
+   "topic_id": 1635,
+   "topic_title": "반도체 호황 세수로 신설하는 미래대응기금",
+   "selection": "control",
+   "size": 2,
+   "weak_count": 2,
+   "anchor_suspect": false,
+   "verdict": "correct",
+   "not_belonging": [],
+   "memo": "[claude 파생판정] 반도체 추가 세수로 만드는 미래대응기금과 3대 메가 프로젝트는 같은 정책 패키지.",
+   "events": [
+    {
+     "id": 1646,
+     "title": "강훈식 대통령비서실장이 5일 고위당정협의회에서 반도체 호황으로 발생한 추가 세수를 활용해 '미래대응기금' 신설을 추진한다고 발표했다.",
+     "article_count": 11,
+     "sample_article_ids": [
+      2,
+      3,
+      106
+     ],
+     "distance": 0.5973
+    },
+    {
+     "id": 1650,
+     "title": "한성숙 총리, 3대 메가 프로젝트 추진 선언",
+     "article_count": 7,
+     "sample_article_ids": [
+      107,
+      2312,
+      2321
+     ],
+     "distance": 0.5018
+    }
+   ]
+  }
+ ]
+}

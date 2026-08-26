@@ -20,8 +20,6 @@
 -- 전제
 --   eval/data/seed/schema_min.sql → articles_2026-07-20.sql → events_2026-07-27.sql
 --   순서로 먼저 적용해야 한다. 여기 귀속이 참조하는 이벤트가 그 안에 있다.
---   기사·이벤트 시드와 apply_local_seed.py 는 이 브랜치에 없다 — 프로덕션 코드 변경과
---   묶여 있어 분리했다(PR #7). eval/data/seed/README.md 참고.
 --
 -- 주의
 --   1) subtopics / subtopic_events 는 아직 마이그레이션에 없는 제안 스키마다

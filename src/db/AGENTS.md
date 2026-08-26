@@ -12,7 +12,7 @@ Shared entity-level DB helpers for the event and topic classifiers. These operat
 | File | Description |
 |------|-------------|
 | `events.py` | `Event` dataclass + helpers: `fetch_unassigned`, `assign_topic`, `find_prev_event`/`find_next_event_id`/`link_into_chain` (doubly-linked chain), `search_candidate_events` (pgvector, recent 2 days), `create_new_event`, `update_event_summary`, `link_article_to_event` |
-| `topics.py` | `Topic` dataclass (with `parent_topic_id`) + `create_topic` (root if no parent) and `update_topic`; writes go through `summary_utils` |
+| `topics.py` | `Topic` dataclass (with `parent_topic_id`) + `create_topic` (root if no parent), `update_topic` (writes go through `summary_utils`), `find_duplicate_topic` (title-similarity dedup guard within a category+parent scope, used by `topic_classifier.pipeline._dedup_guard` before any create) |
 | `topic_causes.py` | `TopicCandidate` dataclass + `search_candidates` (cosine distance, category filter, `roots_only`/`parent_topic_id` hierarchy scoping) and `add_cause` |
 
 ## For AI Agents

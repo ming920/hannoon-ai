@@ -5,7 +5,7 @@
 
 from dataclasses import dataclass
 
-from summary_utils import normalize_summary, normalize_topic_title
+from summary_utils import normalize_summary, normalize_topic_title, title_similarity
 
 
 @dataclass
@@ -33,6 +33,16 @@ RETURNING id
 # 기존 토픽의 제목·요약을 갱신한다.
 # updated_at은 DB 트리거가 처리하므로 여기서 다루지 않는다.
 UPDATE_TOPIC_SQL = "UPDATE topics SET title = ?, summary = ? WHERE id = ?"
+
+# create 직전 중복 검사용: 동일 스코프(최상위 또는 특정 부모 아래) 내 토픽 제목을 모두 가져온다.
+# 후보 검색(topic_causes.search_candidates)과 동일하게 category로 스코프를 좁혀,
+# 서로 다른 분야의 동명 이슈를 잘못 병합하지 않게 한다.
+FETCH_ROOT_TOPIC_TITLES_SQL = (
+    "SELECT id, title FROM topics WHERE category = ?::category AND parent_topic_id IS NULL"
+)
+FETCH_SUBTOPIC_TITLES_SQL = (
+    "SELECT id, title FROM topics WHERE category = ?::category AND parent_topic_id = ?"
+)
 
 
 def create_topic(
@@ -63,3 +73,36 @@ def update_topic(conn, topic_id: int, title: str, summary: str) -> None:
     if not summary:
         raise ValueError("Topic summary is empty.")
     conn.execute(UPDATE_TOPIC_SQL, (title, summary, topic_id))
+
+
+def find_duplicate_topic(
+    conn,
+    category: str,
+    title: str,
+    parent_topic_id: int | None,
+    threshold: float,
+) -> dict | None:
+    """동일 스코프(최상위 또는 parent_topic_id 아래) 내에서 title과 가장 유사한 기존
+    토픽을 찾는다. create 직전 중복 생성을 막는 가드용이며, 유사도가 threshold 이상인
+    토픽이 없으면 None을 반환한다.
+
+    parent_topic_id가 None이면 최상위(root) 토픽 스코프, 값이 있으면 그 부모 아래
+    서브토픽 스코프에서 검색한다. 반환값은 {"id", "title", "similarity"} 또는 None.
+    """
+    if not title:
+        return None
+    if parent_topic_id is None:
+        rows = conn.query(FETCH_ROOT_TOPIC_TITLES_SQL, (category,))
+    else:
+        rows = conn.query(FETCH_SUBTOPIC_TITLES_SQL, (category, parent_topic_id))
+
+    best_row = None
+    best_sim = 0.0
+    for row in rows:
+        sim = title_similarity(title, row["title"])
+        if sim >= threshold and sim > best_sim:
+            best_row = row
+            best_sim = sim
+    if best_row is None:
+        return None
+    return {"id": best_row["id"], "title": best_row["title"], "similarity": best_sim}

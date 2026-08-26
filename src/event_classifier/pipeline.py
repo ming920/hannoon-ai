@@ -10,6 +10,7 @@ from collector.storage import ensure_db
 from db import events
 from embedding import embed_passage, embed_query, to_vector_literal
 from event_classifier.prompts import (
+    MAX_EVENT_CANDIDATES,
     build_event_assignment_prompt,
     build_event_summary_prompt,
     build_extract_main_event_prompt,
@@ -17,7 +18,12 @@ from event_classifier.prompts import (
 from event_classifier.settings import (
     ASSIGN_SCORE_THRESHOLD,
     BATCH_SIZE,
+    CANDIDATE_WINDOW_DAYS,
     DISTANCE_THRESHOLD,
+    EMBEDDING_UPDATE_CENTROID,
+    EMBEDDING_UPDATE_MODE,
+    FALLBACK_DISTANCE_THRESHOLD,
+    FALLBACK_MIN_CANDIDATES,
     LLM_MODEL,
     TOP_K,
 )
@@ -67,6 +73,65 @@ def _load_decision_score(decision: dict) -> float:
         return float(decision.get("score", 0.0))
     except (TypeError, ValueError):
         return 0.0
+
+
+def should_widen_search(candidate_count: int) -> bool:
+    """후보가 부족할 때만 거리를 넓혀 한 번 더 찾을지 판정한다.
+
+    거리 임계값을 통째로 완화하면 과병합이 늘지만(0.50 에서 cannot 충족률 7.4%), 후보가
+    아예 안 잡힌 경우만 넓히면 정상 케이스는 그대로라 과병합이 늘지 않는다.
+    FALLBACK_DISTANCE_THRESHOLD 가 0 이거나 기본 임계값 이하면 비활성이다.
+    """
+    return (
+        FALLBACK_DISTANCE_THRESHOLD > DISTANCE_THRESHOLD
+        and candidate_count < FALLBACK_MIN_CANDIDATES
+    )
+
+
+def build_decision_log(
+    *,
+    article_id: int,
+    main_event: str,
+    result: str,
+    candidates: list[dict],
+    llm_decision: dict,
+    overridden: bool,
+    final_action: str,
+    widened: bool = False,
+) -> dict:
+    """기사 1건의 이벤트 배정 판단을 진단 가능한 형태로 직렬화한다.
+
+    must-link 위반의 원인은 셋 중 하나이고 처방이 서로 다른데, 결과 스냅샷만 보면
+    구분할 수 없다. 이 로그가 그 구분을 가능하게 한다.
+
+      후보 목록에 아예 없음            → 거리 임계값(DISTANCE_THRESHOLD)이 걸러냈다
+      후보에 있으나 shown_to_llm=False → TOP_K가 MAX_EVENT_CANDIDATES보다 커서 절삭됐다
+      LLM에 보였는데 create를 골랐다    → 배정 프롬프트 또는 점수 임계값 문제
+
+    DB·LLM 의존이 없는 순수 함수로 둬서 단위 테스트로 고정한다.
+    """
+    return {
+        "article_id": article_id,
+        "main_event": main_event,
+        "result": result,
+        "candidate_count": len(candidates),
+        "candidates": [
+            {
+                "event_id": int(candidate["id"]),
+                "distance": round(float(candidate.get("distance") or 0), 4),
+                # 검색은 TOP_K개까지 하지만 프롬프트에는 앞 MAX_EVENT_CANDIDATES개만 들어간다.
+                # False면 LLM이 이 후보를 볼 수 없었다는 뜻이다.
+                "shown_to_llm": rank < MAX_EVENT_CANDIDATES,
+                "title": str(candidate.get("title") or "")[:60],
+            }
+            for rank, candidate in enumerate(candidates)
+        ],
+        "llm_decision": llm_decision,
+        "overridden": overridden,
+        "final_action": final_action,
+        # 후보가 부족해 거리를 넓혀 재검색했는가 — A유형 진단에서 이 케이스를 갈라 보려고 남긴다
+        "widened_search": widened,
+    }
 
 
 def _get_first_sentences(text: str, limit: int = 4) -> str:
@@ -282,7 +347,20 @@ def process_event_classification(
                     str(art["published_at"]),
                     DISTANCE_THRESHOLD,
                     TOP_K,
+                    CANDIDATE_WINDOW_DAYS,
                 )
+                widened = should_widen_search(len(candidates))
+                if widened:
+                    # 거리만 넓힌다 — 시간창과 개수 상한은 그대로다. A유형 65건 중 상한에
+                    # 잘린 것이 0건이었으므로 넓혀야 할 것은 거리뿐이다.
+                    candidates = events.search_candidate_events(
+                        conn,
+                        article_query_embedding,
+                        str(art["published_at"]),
+                        FALLBACK_DISTANCE_THRESHOLD,
+                        TOP_K,
+                        CANDIDATE_WINDOW_DAYS,
+                    )
                 article_embedding = to_vector_literal(embed_passage(event_embedding_text))
                 if candidates:
                     decision = _parse_json(
@@ -305,6 +383,16 @@ def process_event_classification(
                         "score": 0.0,
                         "reason": "검색 후보 없음",
                     }
+                # 가드레일이 decision을 덮어쓰기 전의 LLM 원본 판단을 진단용으로 보존한다.
+                # (아래 override 분기가 decision 자체를 교체하므로 여기서 떠 두지 않으면 유실된다)
+                llm_decision = {
+                    "action": decision.get("action"),
+                    "event_id": decision.get("event_id"),
+                    "score": _load_decision_score(decision),
+                    "reason": str(decision.get("reason") or ""),
+                }
+                overridden = False
+
                 action = decision.get("action")
                 if action not in {"assign", "create"}:
                     raise ValueError(f"Invalid event action from LLM: {action!r}")
@@ -312,6 +400,7 @@ def process_event_classification(
                     _load_decision_score(decision) < ASSIGN_SCORE_THRESHOLD
                     or _reason_rejects_assignment(decision.get("reason"))
                 ):
+                    overridden = True
                     decision = {
                         "action": "create",
                         "event_title": main_event,
@@ -364,6 +453,9 @@ def process_event_classification(
                             reason,
                         )
                         events.update_event_summary(conn, event_id, event_summary)
+                        if EMBEDDING_UPDATE_MODE == EMBEDDING_UPDATE_CENTROID:
+                            # link 뒤에 호출해야 방금 붙은 기사가 중심에 반영된다.
+                            events.recenter_event_embedding(conn, event_id)
                         msg = f"assigned to event {event_id}"
                     else:
                         generated_title = str(
@@ -391,11 +483,16 @@ def process_event_classification(
 
                 print(
                     json.dumps(
-                        {
-                            "article_id": art_id,
-                            "main_event": main_event,
-                            "result": msg,
-                        },
+                        build_decision_log(
+                            article_id=art_id,
+                            main_event=main_event,
+                            result=msg,
+                            candidates=candidates,
+                            llm_decision=llm_decision,
+                            overridden=overridden,
+                            final_action=action,
+                            widened=widened,
+                        ),
                         ensure_ascii=False,
                     )
                 )

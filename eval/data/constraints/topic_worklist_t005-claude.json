@@ -1,0 +1,323 @@
+{
+ "schema_version": "worklist-v1",
+ "unit": "topic",
+ "snapshot_date": "2026-08-04T11:41:52",
+ "weak_distance": 0.4,
+ "seed": 20260727,
+ "sample_per_event": 3,
+ "verdict_options": [
+  "correct",
+  "exclude",
+  "unsure"
+ ],
+ "how_to_fill": "각 항목의 verdict 를 셋 중 하나로 채우세요. 'correct' = 이 이벤트들은 모두 같은 토픽이다. 'exclude' = 일부가 다른 토픽이다(not_belonging 에 **이벤트 id** 나열). 'unsure' = 판단 유보(제약을 만들지 않음). 확신이 없으면 unsure 로 두세요 — 틀린 정답이 없는 정답보다 나쁩니다. 대조군(control)은 의심스럽지 않아 보여도 건너뛰지 마세요 — 편향 보정용입니다.",
+ "items": [
+  {
+   "known_conflicts": [],
+   "topic_id": 1694,
+   "topic_title": "검찰청 폐지와 선관위 특검 논의",
+   "selection": "targeted",
+   "size": 3,
+   "weak_count": 3,
+   "anchor_suspect": true,
+   "verdict": "correct",
+   "not_belonging": [],
+   "memo": "[claude 파생판정] 검찰청 폐지와 선관위 특검·감사는 '수사·선거 제도 개혁'으로 묶인다. 1라운드에서 T1633 을 판정할 때 남긴 조합과 정확히 같다.",
+   "events": [
+    {
+     "id": 1626,
+     "title": "더불어민주당이 2024년 10월 검찰청 폐지와 중대범죄수사청 출범을 앞두고 형사소송법 개정을 통해 검찰의 보완수사권을 전면 폐지하는 입법을 추진한다.",
+     "article_count": 9,
+     "sample_article_ids": [
+      2286,
+      2291,
+      2348
+     ],
+     "distance": 0.6745
+    },
+    {
+     "id": 1636,
+     "title": "민주당, 선관위 특검법 제출 예정",
+     "article_count": 10,
+     "sample_article_ids": [
+      12,
+      2296,
+      2339
+     ],
+     "distance": 0.5721
+    },
+    {
+     "id": 1659,
+     "title": "감사원, 선관위 현장 감사 착수",
+     "article_count": 7,
+     "sample_article_ids": [
+      2332,
+      3002,
+      3028
+     ],
+     "distance": 0.521
+    }
+   ]
+  },
+  {
+   "known_conflicts": [],
+   "topic_id": 1696,
+   "topic_title": "미·이란 간 종전 협상에서 이스라엘 배제",
+   "selection": "targeted",
+   "size": 2,
+   "weak_count": 2,
+   "anchor_suspect": false,
+   "verdict": "exclude",
+   "not_belonging": [
+    1675
+   ],
+   "memo": "[claude 파생판정] 토픽은 미·이란 종전 협상(E1629)인데 나토 정상회담 무기 세일즈는 별개 사안. 1라운드에서도 이 둘을 갈랐다.",
+   "events": [
+    {
+     "id": 1629,
+     "title": "트럼프-네타냐후 정상회담 합의",
+     "article_count": 5,
+     "sample_article_ids": [
+      2604,
+      3171,
+      4158
+     ],
+     "distance": 0.6836
+    },
+    {
+     "id": 1675,
+     "title": "트럼프, 나토 정상회담서 무기 세일즈 압박",
+     "article_count": 11,
+     "sample_article_ids": [
+      2589,
+      2878,
+      3150
+     ],
+     "distance": 0.7077
+    }
+   ]
+  },
+  {
+   "known_conflicts": [
+    [
+     9,
+     2311
+    ],
+    [
+     9,
+     2320
+    ],
+    [
+     9,
+     2848
+    ],
+    [
+     2311,
+     2342
+    ],
+    [
+     2311,
+     2509
+    ],
+    [
+     2320,
+     2342
+    ],
+    [
+     2320,
+     2509
+    ],
+    [
+     2342,
+     2848
+    ],
+    [
+     2509,
+     2848
+    ]
+   ],
+   "topic_id": 1687,
+   "topic_title": "배재고 야구부 '스타벅스' 발언 논란",
+   "selection": "targeted",
+   "size": 2,
+   "weak_count": 1,
+   "anchor_suspect": false,
+   "verdict": "exclude",
+   "not_belonging": [
+    1668
+   ],
+   "memo": "[claude 파생판정] 청룡기 조롱 논란과 이병태 부위원장 자진사퇴는 다른 사건. 1라운드와 같은 판정.",
+   "events": [
+    {
+     "id": 1616,
+     "title": "2026년 7월1일, 대한야구소프트볼협회는 청룡기 전국고교야구에서 광주일고 선수를 조롱하며 '스타벅스 가야지'라고 외친 배재고 야구부에 출전 정지 6개월을 결정했다.",
+     "article_count": 22,
+     "sample_article_ids": [
+      9,
+      2342,
+      2509
+     ],
+     "distance": null
+    },
+    {
+     "id": 1668,
+     "title": "이병태 규제합리화위원회 부위원장이 5월 6일 청와대의 사퇴 권고에 따라 자진 사퇴했다.",
+     "article_count": 13,
+     "sample_article_ids": [
+      2311,
+      2320,
+      2848
+     ],
+     "distance": 0.6338
+    }
+   ]
+  },
+  {
+   "known_conflicts": [],
+   "topic_id": 1682,
+   "topic_title": "홈플러스 기업회생절차 폐지와 파산 위기",
+   "selection": "targeted",
+   "size": 2,
+   "weak_count": 1,
+   "anchor_suspect": false,
+   "verdict": "correct",
+   "not_belonging": [],
+   "memo": "[claude 파생판정] 회생절차 폐지와 카드대금 지급보류는 홈플러스 사태의 두 국면. 1라운드와 같은 판정.",
+   "events": [
+    {
+     "id": 1588,
+     "title": "2025년 3월 홈플러스는 MBK파트너스의 차입매수(LBO) 방식 인수 후 부채비율이 1400%를 초과하며 서울회생법원에 기업회생절차(법정관리)를 신청했다.",
+     "article_count": 11,
+     "sample_article_ids": [
+      2672,
+      3062,
+      3081
+     ],
+     "distance": null
+    },
+    {
+     "id": 1684,
+     "title": "홈플러스가 2024년 3월부터 일부 카드사의 매출 대금 지급 보류를 즉각 철회해야 한다고 요구했다.",
+     "article_count": 6,
+     "sample_article_ids": [
+      3067,
+      3126,
+      3491
+     ],
+     "distance": 0.5407
+    }
+   ]
+  },
+  {
+   "known_conflicts": [],
+   "topic_id": 1699,
+   "topic_title": "미래대응기금 신설과 3대 메가프로젝트 추진",
+   "selection": "targeted",
+   "size": 2,
+   "weak_count": 1,
+   "anchor_suspect": false,
+   "verdict": "correct",
+   "not_belonging": [],
+   "memo": "[claude 파생판정] 미래대응기금과 3대 메가 프로젝트는 같은 정책 패키지. 1라운드와 같은 판정.",
+   "events": [
+    {
+     "id": 1646,
+     "title": "강훈식 대통령비서실장이 5일 고위당정협의회에서 반도체 호황으로 발생한 추가 세수를 활용해 '미래대응기금' 신설을 추진한다고 발표했다.",
+     "article_count": 11,
+     "sample_article_ids": [
+      2,
+      3,
+      106
+     ],
+     "distance": null
+    },
+    {
+     "id": 1650,
+     "title": "한성숙 총리, 3대 메가 프로젝트 추진 선언",
+     "article_count": 7,
+     "sample_article_ids": [
+      107,
+      2312,
+      2321
+     ],
+     "distance": 0.5018
+    }
+   ]
+  },
+  {
+   "known_conflicts": [
+    [
+     2383,
+     2386
+    ],
+    [
+     2383,
+     2965
+    ],
+    [
+     2383,
+     3338
+    ],
+    [
+     2386,
+     2678
+    ],
+    [
+     2386,
+     2909
+    ],
+    [
+     2678,
+     2965
+    ],
+    [
+     2678,
+     3338
+    ],
+    [
+     2909,
+     2965
+    ],
+    [
+     2909,
+     3338
+    ]
+   ],
+   "topic_id": 1711,
+   "topic_title": "삼성·SK하이닉스, 반도체 경쟁력 강화",
+   "selection": "control",
+   "size": 2,
+   "weak_count": 1,
+   "anchor_suspect": false,
+   "verdict": "exclude",
+   "not_belonging": [
+    1693
+   ],
+   "memo": "[claude 파생판정] 삼성전자 실적과 SK하이닉스 나스닥 상장은 주체도 사안도 다르다. 1라운드에서도 상장 건을 반도체 시황에서 뺐다. 대조군에서도 과병합이 나왔다.",
+   "events": [
+    {
+     "id": 1690,
+     "title": "삼성전자, 2분기 역대 최대 실적 달성",
+     "article_count": 18,
+     "sample_article_ids": [
+      2383,
+      2678,
+      2909
+     ],
+     "distance": 0.3936
+    },
+    {
+     "id": 1693,
+     "title": "SK하이닉스, 나스닥 상장 예정",
+     "article_count": 9,
+     "sample_article_ids": [
+      2386,
+      2965,
+      3338
+     ],
+     "distance": 0.4736
+    }
+   ]
+  }
+ ]
+}

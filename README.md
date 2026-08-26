@@ -44,6 +44,15 @@ LLM_BASE_URL=https://api.upstage.ai/v1
 DATABASE_URL=your_postgres_database_url
 ```
 
+## 로컬 개발 환경
+
+이벤트/토픽 분류까지 로컬에서 돌리려면 **pgvector 가 있는 Postgres 가 필요합니다.**
+SQLite 는 기사 수집·크롤링·요약까지만 됩니다(`events`/`topics` 테이블을 만들지 않습니다).
+
+스키마는 이 저장소가 아니라 형제 저장소 **`hannoon-supabase`** 가 소유합니다. 로컬 Supabase 기동,
+기사 시드 투입, Upstage / 로컬 Ollama 두 경로의 `.env` 설정까지 전체 절차는
+**[docs/local-setup.md](docs/local-setup.md)** 에 있습니다.
+
 ## 권장 모델 설정
 
 ```env

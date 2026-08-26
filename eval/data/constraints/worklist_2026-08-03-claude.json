@@ -1,0 +1,1602 @@
+{
+ "schema_version": "worklist-v1",
+ "snapshot_date": "2026-07-27T18:59:53",
+ "weak_distance": 0.4,
+ "seed": 20260727,
+ "verdict_options": [
+  "correct",
+  "exclude",
+  "unsure"
+ ],
+ "how_to_fill": "각 항목의 verdict 를 셋 중 하나로 채우세요. 'correct' = 이 기사들은 모두 같은 사건이다. 'exclude' = 일부가 다른 사건이다(not_belonging 에 기사 id 나열). 'unsure' = 판단 유보(제약을 만들지 않음). 확신이 없으면 unsure 로 두세요 — 틀린 정답이 없는 정답보다 나쁩니다.",
+ "items": [
+  {
+   "known_conflicts": [],
+   "event_id": 1426,
+   "event_title": "강훈식, 반도체 세수로 미래대응기금 신설 추진",
+   "selection": "targeted",
+   "size": 17,
+   "weak_count": 6,
+   "anchor_suspect": false,
+   "verdict": "exclude",
+   "not_belonging": [
+    107,
+    2326,
+    2341,
+    2422,
+    2754,
+    2757
+   ],
+   "memo": "[claude 파생판정] 앵커는 '반도체 추가 세수로 미래대응기금 신설'. 메가특구법 논의, 청년 국유재산 정책, 총리·대통령의 메가 프로젝트 일반 발언은 각각 다른 사건. 구윤철 근로자 소득세 감면(2385·3471·3605)도 별개로 보이나, 기존 검수가 셋을 서로 must 로 묶어 두었고 exclude 는 빼낸 기사들을 서로도 남으로 취급하므로 남겨 둔다.",
+   "articles": [
+    {
+     "id": 2,
+     "title": "靑 “반도체 추가세수로 ‘미래 대응 기금’ 신설 추진”",
+     "publisher": "조선일보",
+     "distance": 0.1226
+    },
+    {
+     "id": 3,
+     "title": "당정 “AI센터 전력·인허가 전폭 지원…‘추가’ 세수 활용”",
+     "publisher": "조선일보",
+     "distance": 0.1974
+    },
+    {
+     "id": 106,
+     "title": "[정책 인사이트] 靑 ‘미래대응기금’ 추진 공식화... 미국은 사용 요건 제한하고 의회 동의 절차 둬",
+     "publisher": "조선일보",
+     "distance": 0.1825
+    },
+    {
+     "id": 107,
+     "title": "韓 총리 “3대 메가 프로젝트로 새로운 성장 시대”",
+     "publisher": "조선일보",
+     "distance": 0.4135
+    },
+    {
+     "id": 118,
+     "title": "강훈식 “반도체 추가 세수로 미래대응기금 신설”",
+     "publisher": "조선일보",
+     "distance": null
+    },
+    {
+     "id": 2326,
+     "title": "李 “메가 프로젝트는 속도전...역사적 과제에 협조 못해도 방해는 말아야”",
+     "publisher": "조선일보",
+     "distance": 0.4581
+    },
+    {
+     "id": 2335,
+     "title": "靑 “반도체 추가 세수로 미래 대응 기금 신설”",
+     "publisher": "조선일보",
+     "distance": 0.0733
+    },
+    {
+     "id": 2341,
+     "title": "메가특구, 법인·소득세 감면 검토… 與 “이달 특별법 일부 처리”",
+     "publisher": "조선일보",
+     "distance": 0.4001
+    },
+    {
+     "id": 2385,
+     "title": "구윤철 “지방 근로자 소득세 서울보다 더 감면”",
+     "publisher": "조선일보",
+     "distance": 0.3837
+    },
+    {
+     "id": 2422,
+     "title": "[단독] 與산중위, 8일 산업통상부 당정협의…메가특구법 논의",
+     "publisher": "조선일보",
+     "distance": 0.4056
+    },
+    {
+     "id": 2666,
+     "title": "靑 \"미래대응기금으로 양극화·청년·균형발전 지원…8월 구체화\"",
+     "publisher": "연합뉴스TV",
+     "distance": 0.1696
+    },
+    {
+     "id": 2754,
+     "title": "청년정책 간담회 참석한 박홍근 기획예산처 장관",
+     "publisher": "매일경제",
+     "distance": 0.4124
+    },
+    {
+     "id": 2757,
+     "title": "[단독] 청년 일자리·주거 지원에 국유재산 활용 대폭 확대",
+     "publisher": "매일경제",
+     "distance": 0.4242
+    },
+    {
+     "id": 3034,
+     "title": "“미래대응기금, 반도체 추가 세수로 신설”",
+     "publisher": "경향신문",
+     "distance": 0.1377
+    },
+    {
+     "id": 3244,
+     "title": "靑 \"미래대응기금, 특별법 형태로 신설…8월말 정부 예산안 편성쯤 내용 담아야\"",
+     "publisher": "뉴시스",
+     "distance": 0.2261
+    },
+    {
+     "id": 3471,
+     "title": "구윤철 \"3대 메가프로젝트 총력전…소득세 차등지원 검토\"",
+     "publisher": "뉴시스",
+     "distance": 0.3295
+    },
+    {
+     "id": 3605,
+     "title": "구윤철 “메가 프로젝트 근로자, 세금 감면 추진…자녀 교육비도 검토”",
+     "publisher": "동아일보",
+     "distance": 0.3849
+    }
+   ]
+  },
+  {
+   "known_conflicts": [
+    [
+     4,
+     12
+    ],
+    [
+     4,
+     2296
+    ],
+    [
+     4,
+     2339
+    ],
+    [
+     4,
+     2990
+    ],
+    [
+     4,
+     3272
+    ],
+    [
+     4,
+     4604
+    ],
+    [
+     12,
+     3900
+    ],
+    [
+     12,
+     4639
+    ],
+    [
+     2296,
+     3900
+    ],
+    [
+     2296,
+     4639
+    ],
+    [
+     2339,
+     3900
+    ],
+    [
+     2339,
+     4639
+    ],
+    [
+     2990,
+     3900
+    ],
+    [
+     2990,
+     4639
+    ],
+    [
+     3272,
+     3900
+    ],
+    [
+     3272,
+     4639
+    ],
+    [
+     3900,
+     4604
+    ],
+    [
+     4604,
+     4639
+    ]
+   ],
+   "event_id": 1394,
+   "event_title": "국회 국조특위, 잠실 개표소 진입",
+   "selection": "targeted",
+   "size": 24,
+   "weak_count": 4,
+   "anchor_suspect": false,
+   "verdict": "unsure",
+   "not_belonging": [],
+   "memo": "[claude 파생판정] 이전 검수가 재검표 추진과 개표소 진입을 세밀하게 갈라 놓았다(윤상현 발언과 한병도 발언까지 다른 사건으로 판정). 그 입도를 재현할 자신이 없어 유보.",
+   "articles": [
+    {
+     "id": 4,
+     "title": "윤상현 “올림픽공원 개표소 투표지 247만장 공개 재검표 추진”",
+     "publisher": "조선일보",
+     "distance": 0.3017
+    },
+    {
+     "id": 12,
+     "title": "與 “이번 주 선관위 특검법 제출…특검, 제3자 추천이 공정”",
+     "publisher": "조선일보",
+     "distance": 0.4644
+    },
+    {
+     "id": 2296,
+     "title": "한병도 “올림픽공원 투표지 247만장, 재검표·수개표 추진 적극 검토”",
+     "publisher": "조선일보",
+     "distance": 0.2971
+    },
+    {
+     "id": 2297,
+     "title": "선관위 “올림픽공원 투표용지 재검표 검토” 5000만원은 선관위가 부담",
+     "publisher": "조선일보",
+     "distance": 0.2874
+    },
+    {
+     "id": 2332,
+     "title": "감사원, 선관위 현장 감사 착수… 투표용지 인쇄 예산, 선관위 직원 해외 출장, 재외선거관 파견 들여다본다",
+     "publisher": "조선일보",
+     "distance": 0.4039
+    },
+    {
+     "id": 2339,
+     "title": "선관위 특검, 與 “제3자 추천”… 국힘 “野가 추천해야 공정 수사”",
+     "publisher": "조선일보",
+     "distance": 0.4019
+    },
+    {
+     "id": 2663,
+     "title": "선관위 국조특위, 위철환 등 1차 청문회 증인 97명 채택",
+     "publisher": "연합뉴스TV",
+     "distance": 0.3136
+    },
+    {
+     "id": 2667,
+     "title": "국조특위, 중앙선관위 현장조사서 \"상황실 늑장 대응\" 질타",
+     "publisher": "연합뉴스TV",
+     "distance": 0.2229
+    },
+    {
+     "id": 2990,
+     "title": "한병도 “올림픽공원 투표지 247만장 재검표·수개표 추진 적극 검토”",
+     "publisher": "경향신문",
+     "distance": 0.3069
+    },
+    {
+     "id": 3002,
+     "title": "선관위 예산 집행 등 감사원서 감사 착수",
+     "publisher": "경향신문",
+     "distance": 0.4049
+    },
+    {
+     "id": 3028,
+     "title": "감사원, 선관위 예산 감사 착수…편성·집행 실태 살핀다 “국민 의혹 점검”",
+     "publisher": "경향신문",
+     "distance": 0.3972
+    },
+    {
+     "id": 3272,
+     "title": "한병도 \"올림픽공원 투표지 247만장, 재검표·수개표 추진 방안 적극 검토\"",
+     "publisher": "뉴시스",
+     "distance": 0.2982
+    },
+    {
+     "id": 3294,
+     "title": "선관위 \"올림픽공원 투표용지 재검표 검토…국조특위 의결 거쳐야\"",
+     "publisher": "뉴시스",
+     "distance": 0.2518
+    },
+    {
+     "id": 3307,
+     "title": "[오늘의 주요일정]국회(7월7일 화요일)",
+     "publisher": "뉴시스",
+     "distance": 0.3981
+    },
+    {
+     "id": 3900,
+     "title": "한병도 “247만장 투표용지 재검표 추진안 적극 검토”",
+     "publisher": "세계일보",
+     "distance": 0.2969
+    },
+    {
+     "id": 3903,
+     "title": "선관위 \"투표지 247만장 이송 전 검증에 9시간·5000만원 소요\"",
+     "publisher": "세계일보",
+     "distance": 0.2924
+    },
+    {
+     "id": 3905,
+     "title": "선관위 국조특위, 오늘 중앙선관위·서울선관위 현장 조사",
+     "publisher": "세계일보",
+     "distance": 0.2398
+    },
+    {
+     "id": 4123,
+     "title": "국회 국조특위 의원들, 봉쇄 27일 만에 잠실 개표소 진입",
+     "publisher": "여성신문",
+     "distance": null
+    },
+    {
+     "id": 4362,
+     "title": "중앙선관위 \"올림픽공원 투표용지 재검표 추진…비용 직접 부담\"",
+     "publisher": "JTBC",
+     "distance": 0.3516
+    },
+    {
+     "id": 4600,
+     "title": "국조특위, 중앙선관위 현장조사…“느슨한 상황실 운영이 사태 키워”",
+     "publisher": "이투데이",
+     "distance": 0.2147
+    },
+    {
+     "id": 4604,
+     "title": "與 한병도 “올림픽공원 투표지 재검표·수개표 추진 적극 검토”",
+     "publisher": "이투데이",
+     "distance": 0.3053
+    },
+    {
+     "id": 4639,
+     "title": "올림픽공원 투표지 재검표하나?…민주 \"247만장 수개표 추진 적극 검토\"",
+     "publisher": "MBN",
+     "distance": 0.2466
+    },
+    {
+     "id": 4642,
+     "title": "선관위 \"잠실 개표소 검증에 9시간·5천만원 예상\"",
+     "publisher": "MBN",
+     "distance": 0.2794
+    },
+    {
+     "id": 4655,
+     "title": "칼 빼든 감사원, 선관위 예산 들여다본다…국회도 오늘 현장조사",
+     "publisher": "MBN",
+     "distance": 0.3954
+    }
+   ]
+  },
+  {
+   "known_conflicts": [],
+   "event_id": 1397,
+   "event_title": "2026년 7월1일, 대한야구소프트볼협회는 청룡기 전국고교야구에서 광주일고 선수를 조롱하며 '스타벅스 가야지'라고 외친 배재고 야구부에 출전 정지 6개월을 결정했다.",
+   "selection": "targeted",
+   "size": 27,
+   "weak_count": 3,
+   "anchor_suspect": false,
+   "verdict": "exclude",
+   "not_belonging": [
+    2320,
+    3785,
+    4231
+   ],
+   "memo": "[claude 파생판정] 앵커는 청룡기 조롱과 배재고의 사과 방문. '이병태 자진사퇴'는 아예 다른 사안이고 진중권 논평·MBC 앵커 발언도 별개. 이진숙 화환 묶음(2342·3770·3776·4233)과 근조화환 비판 묶음(3656·4462)은 기존 검수가 각각 서로 must 로 묶어 두어 남겨 둔다.",
+   "articles": [
+    {
+     "id": 9,
+     "title": "‘5·18 몰이해’ 청년 세대에 가차 없는 여권",
+     "publisher": "조선일보",
+     "distance": 0.1497
+    },
+    {
+     "id": 2320,
+     "title": "‘5·18 성역' 논란 이병태, 靑 권고에 자진사퇴",
+     "publisher": "조선일보",
+     "distance": 0.4053
+    },
+    {
+     "id": 2342,
+     "title": "이진숙, 배재고에 응원 화환... “李 정권, 생각에 수갑 채우나”",
+     "publisher": "조선일보",
+     "distance": 0.2641
+    },
+    {
+     "id": 2509,
+     "title": "광주 찾은 배재고 학생들 “깊이 반성하고 사과”",
+     "publisher": "조선일보",
+     "distance": 0.192
+    },
+    {
+     "id": 2529,
+     "title": "광주일고 앞에 선 배재고 선수들… “하면 안 되는 행동이었다” 반성",
+     "publisher": "조선일보",
+     "distance": 0.1896
+    },
+    {
+     "id": 3124,
+     "title": "“죄송합니다”…“다시 나아가자”",
+     "publisher": "경향신문",
+     "distance": 0.2178
+    },
+    {
+     "id": 3507,
+     "title": "'5·18 조롱' 배재고, 9일부터 역사교육…\"재심 신청은 논의\"",
+     "publisher": "뉴시스",
+     "distance": 0.1539
+    },
+    {
+     "id": 3572,
+     "title": "김대중 전남광주교육감, 배재고 학생들 위로…\"훌훌 털고 일어나야\"",
+     "publisher": "뉴시스",
+     "distance": 0.377
+    },
+    {
+     "id": 3656,
+     "title": "하림, 배재고 앞 근조화환 행렬에 “꽃으로 고약한 짓”",
+     "publisher": "동아일보",
+     "distance": 0.3214
+    },
+    {
+     "id": 3770,
+     "title": "‘5·18민주화운동 맞냐’ 답변 회피 이진숙, 배재고 화환… “행동 매우 부적절”",
+     "publisher": "미디어오늘",
+     "distance": 0.4116
+    },
+    {
+     "id": 3776,
+     "title": "배재고 사과 전날 화환 보낸 이진숙 “스타벅스, 5·18 무슨 관계?”",
+     "publisher": "미디어오늘",
+     "distance": 0.3184
+    },
+    {
+     "id": 3785,
+     "title": "배재고 응원 화환 등장에 MBC 앵커 “어른들이 아이 미래 망쳐”",
+     "publisher": "미디어오늘",
+     "distance": 0.2788
+    },
+    {
+     "id": 3787,
+     "title": "배재고 징계에 국힘 “표현자유, 이재명탓”? … SBS “제재 없어 조롱 난무”",
+     "publisher": "미디어오늘",
+     "distance": null
+    },
+    {
+     "id": 3814,
+     "title": "배재고 사과에 피해자 광주일고 “어깨 펴라” 화답",
+     "publisher": "미디어오늘",
+     "distance": 0.2522
+    },
+    {
+     "id": 3820,
+     "title": "배재고 선수단, 광주일고 방문 “선수들과 광주 시민에게 진심으로 사과”",
+     "publisher": "미디어오늘",
+     "distance": 0.207
+    },
+    {
+     "id": 3980,
+     "title": "배재고 “진심으로 사과”…광주일고 “어깨 펴길, 멋진 승부 펼치자”",
+     "publisher": "시사저널",
+     "distance": 0.2087
+    },
+    {
+     "id": 4231,
+     "title": "진중권, '무섭노' 일베 논란과 '이진숙 화환'에 quot;적당히 해hellip;온 나라가 유치해지는 중quot;",
+     "publisher": "프레시안",
+     "distance": 0.4005
+    },
+    {
+     "id": 4233,
+     "title": "이진숙 quot;스벅과 5.18 모욕이 무슨 관계? 생각에 수갑 채우는 나라는 어딘가quot;",
+     "publisher": "프레시안",
+     "distance": 0.3313
+    },
+    {
+     "id": 4273,
+     "title": "[속보] 배재고 야구부, 광주일고 찾아 자필 사과문 전달",
+     "publisher": "프레시안",
+     "distance": 0.2183
+    },
+    {
+     "id": 4317,
+     "title": "[오늘 한 컷] 학생들도 사과했건만…",
+     "publisher": "JTBC",
+     "distance": 0.3273
+    },
+    {
+     "id": 4361,
+     "title": "배재고 눈물의 사과에…광주제일고 \"어깨 펴시고\" 용서",
+     "publisher": "JTBC",
+     "distance": 0.3311
+    },
+    {
+     "id": 4372,
+     "title": "배재고 사과 받아준 광주제일고…\"어깨 펴\" 화해의 악수",
+     "publisher": "JTBC",
+     "distance": 0.3384
+    },
+    {
+     "id": 4377,
+     "title": "배재고 야구부, 광주 찾아 사과…\"항상 반성하는 마음으로 살겠다\"",
+     "publisher": "JTBC",
+     "distance": 0.3022
+    },
+    {
+     "id": 4379,
+     "title": "광주서 고개 숙인 배재고…\"인성·태도 중요성 깨달아\" 사과문 전달",
+     "publisher": "JTBC",
+     "distance": 0.2231
+    },
+    {
+     "id": 4462,
+     "title": "\"등교하는 애들 안 무섭겠냐\"…배재고 '화환 행렬'에 일침",
+     "publisher": "SBS",
+     "distance": 0.3219
+    },
+    {
+     "id": 4607,
+     "title": "광주일고, 배재고 선처 요청…'6개월 출전정지' 징계 완화될까",
+     "publisher": "이투데이",
+     "distance": 0.192
+    },
+    {
+     "id": 4701,
+     "title": "\"인성·태도 중요성 깨달아\" 배재고 학생들 광주서 사과…배재고부터 아이돌 사투리까지 정치권 공방으로 [프레스룸 LIVE]",
+     "publisher": "MBN",
+     "distance": 0.3541
+    }
+   ]
+  },
+  {
+   "known_conflicts": [],
+   "event_id": 1407,
+   "event_title": "민주당, 보완수사권 전면 폐지 입법 추진",
+   "selection": "targeted",
+   "size": 10,
+   "weak_count": 1,
+   "anchor_suspect": false,
+   "verdict": "exclude",
+   "not_belonging": [
+    2288
+   ],
+   "memo": "[claude 파생판정] '당대표 선거를 선호투표로' 는 보완수사권 폐지와 무관한 전당대회 룰 사건.",
+   "articles": [
+    {
+     "id": 2286,
+     "title": "與 내부서도 보완수사권 폐지 신중론…“피해자 보호 장치 따져야”",
+     "publisher": "조선일보",
+     "distance": 0.1154
+    },
+    {
+     "id": 2288,
+     "title": "與 “당 대표 선거 ‘결선 투표’ 아닌 ‘선호 투표’로 결정”",
+     "publisher": "조선일보",
+     "distance": 0.4543
+    },
+    {
+     "id": 2291,
+     "title": "보완수사권 폐지 속도 내는 與...“이번 주 소위 논의 시작, 8·17 넘기기 어려울 것\"",
+     "publisher": "조선일보",
+     "distance": 0.1365
+    },
+    {
+     "id": 2348,
+     "title": "與 보완수사권 폐지 속도전에… 내부서도 “부작용 커”",
+     "publisher": "조선일보",
+     "distance": null
+    },
+    {
+     "id": 3287,
+     "title": "한병도 \"보완수사권 완전 폐지는 확고부동…이번주 형소법 개정안 발의 목표\"",
+     "publisher": "뉴시스",
+     "distance": 0.2112
+    },
+    {
+     "id": 3289,
+     "title": "서영교 '형소법 처리 시점'에 \"전당대회 이후 넘어가기 어려울 것\"",
+     "publisher": "뉴시스",
+     "distance": 0.3169
+    },
+    {
+     "id": 3291,
+     "title": "김민석 \"檢 보완수사권 폐지로 정리…여러가지 보완책 불가피\"",
+     "publisher": "뉴시스",
+     "distance": 0.2799
+    },
+    {
+     "id": 3600,
+     "title": "與, 보완수사권 폐지 속도…서영교 “전대 이후로 넘기기 어려울 것”",
+     "publisher": "동아일보",
+     "distance": 0.1226
+    },
+    {
+     "id": 3620,
+     "title": "與 “보완수사권 폐지, 재논의 사항 아니다”",
+     "publisher": "동아일보",
+     "distance": 0.1973
+    },
+    {
+     "id": 4214,
+     "title": "민주당 quot;'보완수사권 완전 폐지' 착수hellip;최대한 신속하게 추진quot;",
+     "publisher": "프레시안",
+     "distance": 0.1991
+    }
+   ]
+  },
+  {
+   "known_conflicts": [],
+   "event_id": 1449,
+   "event_title": "이재명 대통령은 6일 청와대에서 한성숙 신임 국무총리와 주례 보고 회동을 열고, 총리에게 AI 대전환, 규제 합리화, 창업 르네상스, 청년 정책 내실화를 4대 역점 과제로 지정하고 전권을 부여해 국정 전반의 근본적 혁신을 이끌어달라고 주문했다.",
+   "selection": "targeted",
+   "size": 2,
+   "weak_count": 1,
+   "anchor_suspect": false,
+   "verdict": "exclude",
+   "not_belonging": [
+    3026
+   ],
+   "memo": "[claude 파생판정] 앵커는 대통령-총리 주례보고. '야당 메가 프로젝트 비판에 일침'은 같은 날이라도 별개 발언.",
+   "articles": [
+    {
+     "id": 2321,
+     "title": "李대통령, ‘4대 역점 과제’ 보고한 韓총리에 “전권 갖고 국정 혁신 이끌어 달라”",
+     "publisher": "조선일보",
+     "distance": null
+    },
+    {
+     "id": 3026,
+     "title": "“역사적 과제에 협조는 못해도 방해는 말아야”···이 대통령, 야당 ‘메가 프로젝트’ 비판에 일침",
+     "publisher": "경향신문",
+     "distance": 0.4508
+    }
+   ]
+  },
+  {
+   "known_conflicts": [],
+   "event_id": 1487,
+   "event_title": "금융위원회가 7일 서울 중구 은행회관에서 '포용금융 전략 추진단' 금융산업분과 킥오프 회의를 열고, 금융회사의 포용금융 실적 평가에 금리 인하 효과, 금융 접근성 개선, 지배구조 반영 등을 종합적으로 반영하기로 결정했다.",
+   "selection": "targeted",
+   "size": 2,
+   "weak_count": 1,
+   "anchor_suspect": false,
+   "verdict": "exclude",
+   "not_belonging": [
+    3483
+   ],
+   "memo": "[claude 파생판정] '[오늘의 주요일정]경제'는 일정 나열 기사로 특정 사건이 아니다.",
+   "articles": [
+    {
+     "id": 2450,
+     "title": "금융위, 금융사 포용금융 실적 평가 때 지배구조 반영 여부까지 본다",
+     "publisher": "조선일보",
+     "distance": null
+    },
+    {
+     "id": 3483,
+     "title": "[오늘의 주요일정]경제(7월7일화요일)",
+     "publisher": "뉴시스",
+     "distance": 0.45
+    }
+   ]
+  },
+  {
+   "known_conflicts": [],
+   "event_id": 1515,
+   "event_title": "김민석 전 국무총리가 2026년 7월 7일 당원 직선 방식으로 청년 최고위원을 선출할 것을 제안했다.",
+   "selection": "targeted",
+   "size": 3,
+   "weak_count": 1,
+   "anchor_suspect": false,
+   "verdict": "exclude",
+   "not_belonging": [
+    3279
+   ],
+   "memo": "[claude 파생판정] 앵커는 청년최고위원제 신설 제안. '메가 프로젝트 토론회 선점전'은 다른 사건.",
+   "articles": [
+    {
+     "id": 3251,
+     "title": "[속보]與, 8월 전당대회서 청년최고위원제 도입",
+     "publisher": "뉴시스",
+     "distance": 0.2982
+    },
+    {
+     "id": 3279,
+     "title": "김민석·정청래, '메가 프로젝트' 선점전…국회서 잇단 토론회",
+     "publisher": "뉴시스",
+     "distance": 0.445
+    },
+    {
+     "id": 3290,
+     "title": "김민석 \"당원 직선 청년 최고위원 제안…당원주권 확대의 길\"",
+     "publisher": "뉴시스",
+     "distance": null
+    }
+   ]
+  },
+  {
+   "known_conflicts": [],
+   "event_id": 1367,
+   "event_title": "미국-이란 무력 충돌 재개",
+   "selection": "targeted",
+   "size": 3,
+   "weak_count": 1,
+   "anchor_suspect": false,
+   "verdict": "exclude",
+   "not_belonging": [
+    4158
+   ],
+   "memo": "[claude 파생판정] 앵커는 미국-이란 무력충돌 재개. '트럼프-네타냐후 통화와 정상회담 예고'는 별개.",
+   "articles": [
+    {
+     "id": 4041,
+     "title": "미·이란 휴전 9일 만에 무력 충돌…서로 “합의 어겼다”",
+     "publisher": "시사저널",
+     "distance": null
+    },
+    {
+     "id": 4158,
+     "title": "트럼프-네타냐후 통화…\"곧 미국서 정상회담\"",
+     "publisher": "여성신문",
+     "distance": 0.4434
+    },
+    {
+     "id": 4210,
+     "title": "호르무즈middot;레바논서 잇단 무력충돌hellip;위기 빠진 미국-이란 휴전",
+     "publisher": "프레시안",
+     "distance": 0.2798
+    }
+   ]
+  },
+  {
+   "known_conflicts": [],
+   "event_id": 1441,
+   "event_title": "정부는 6일 호남권 반도체 클러스터를 광주 군공항 부지에 조성하기로 결정했다.",
+   "selection": "targeted",
+   "size": 31,
+   "weak_count": 1,
+   "anchor_suspect": false,
+   "verdict": "exclude",
+   "not_belonging": [
+    3485
+   ],
+   "memo": "[claude 파생판정] '[오늘의 주요일정]국토교통부'는 일정 나열 기사. '매경이 전하는 세상의 지식'(2836)도 브리핑 기사로 보였으나 기존 검수가 이 사건 기사 23건과 must 로 묶어 두었으므로 사람 판정을 따른다. '李 호남 원전·댐 검토'(2312)는 전력 사안이라 애매해 남겨 둔다.",
+   "articles": [
+    {
+     "id": 2312,
+     "title": "李 “기업들 전력 걱정”… 호남 원전·댐 추가 검토",
+     "publisher": "조선일보",
+     "distance": 0.3493
+    },
+    {
+     "id": 2313,
+     "title": "여의도 3배 평지, KTX 역과 인접… 국유지라 토지보상 문제 없어",
+     "publisher": "조선일보",
+     "distance": 0.1964
+    },
+    {
+     "id": 2314,
+     "title": "호남 반도체, 광주 군공항에 짓는다",
+     "publisher": "조선일보",
+     "distance": 0.0936
+    },
+    {
+     "id": 2319,
+     "title": "靑 “호남 반도체 클러스터, 광주 군공항 부지에 조성”",
+     "publisher": "조선일보",
+     "distance": null
+    },
+    {
+     "id": 2533,
+     "title": "민형배 전남광주시장 “광주 군공항은 반도체 공장 최적지”",
+     "publisher": "조선일보",
+     "distance": 0.2328
+    },
+    {
+     "id": 2805,
+     "title": "반도체 산단 확정에도 무안 “3대 조건은 그대로”…군공항 이전 협의 최대 변수",
+     "publisher": "매일경제",
+     "distance": 0.2404
+    },
+    {
+     "id": 2836,
+     "title": "매경이 전하는 세상의 지식 (매-세-지, 7월 7일)",
+     "publisher": "매일경제",
+     "distance": 0.0983
+    },
+    {
+     "id": 2917,
+     "title": "[뉴스&분석] 광속 '광주팹'… 軍공항 용지에 짓는다",
+     "publisher": "매일경제",
+     "distance": 0.1097
+    },
+    {
+     "id": 2922,
+     "title": "군공항 토지수용 부담 없고 250만평 이미 평탄화 마쳐",
+     "publisher": "매일경제",
+     "distance": 0.1091
+    },
+    {
+     "id": 2997,
+     "title": "호남권 반도체 클러스터…광주 군공항에 들어선다",
+     "publisher": "경향신문",
+     "distance": 0.1117
+    },
+    {
+     "id": 2999,
+     "title": "광주 군공항은 어떻게 되나…민항기는 무안공항으로 군공항도 무안 일대 이전",
+     "publisher": "경향신문",
+     "distance": 0.3319
+    },
+    {
+     "id": 3007,
+     "title": "민형배 전남광주통합시장 “광주 군 공항, 반도체 부지로 최적”",
+     "publisher": "경향신문",
+     "distance": 0.2594
+    },
+    {
+     "id": 3011,
+     "title": "248만평 넓은 부지·용수 등 강점···군 공항 기능이전 해결돼야",
+     "publisher": "경향신문",
+     "distance": 0.1466
+    },
+    {
+     "id": 3014,
+     "title": "호남 반도체 클러스터, 광주 군 공항 부지에 짓는다···“250만평 부지, 도심·KTX역 인접”",
+     "publisher": "경향신문",
+     "distance": 0.0993
+    },
+    {
+     "id": 3019,
+     "title": "[속보] 청와대 “광주 군공항 250만평 부지에 호남권 반도체 산단 조성”",
+     "publisher": "경향신문",
+     "distance": 0.1251
+    },
+    {
+     "id": 3063,
+     "title": "착공까지 6년 걸린 용인…정부, ‘호남 임기 내 완공’ 강한 의지",
+     "publisher": "경향신문",
+     "distance": 0.1742
+    },
+    {
+     "id": 3078,
+     "title": "발표 일주일만에 광주 군공항 부지 선정까지, 정부 ‘속도전’에 사활 걸었다",
+     "publisher": "경향신문",
+     "distance": 0.173
+    },
+    {
+     "id": 3197,
+     "title": "靑 “대형 부지·평탄화 작업 완료… 기업들이 군공항 적합 의견 제시”",
+     "publisher": "국민일보",
+     "distance": 0.1188
+    },
+    {
+     "id": 3485,
+     "title": "[오늘의 주요일정]국토교통부(7월7일 화요일)",
+     "publisher": "뉴시스",
+     "distance": 0.443
+    },
+    {
+     "id": 3612,
+     "title": "광주 군공항 부지에 삼성-SK 반도체 팹 짓는다",
+     "publisher": "동아일보",
+     "distance": 0.1417
+    },
+    {
+     "id": 3615,
+     "title": "광주 군공항 평지에 국유지, 빠른 사업 기대… ‘비행단 이전’ 변수",
+     "publisher": "동아일보",
+     "distance": 0.1018
+    },
+    {
+     "id": 4224,
+     "title": "靑 quot;호남 반도체 산단, 광주 군공항 부지에 조성quot;",
+     "publisher": "프레시안",
+     "distance": 0.094
+    },
+    {
+     "id": 4299,
+     "title": "속전속결 '광주 군 공항' 낙점…\"리스크 적은 국유지\" 속도전 최적",
+     "publisher": "JTBC",
+     "distance": 0.1612
+    },
+    {
+     "id": 4313,
+     "title": "호남 반도체 클러스터 속전속결…\"광주 군 공항\" 부지 확정",
+     "publisher": "JTBC",
+     "distance": 0.1457
+    },
+    {
+     "id": 4401,
+     "title": "민형배 시장 \"군공항 이전 전에도 반도체 산단 착수 가능\"",
+     "publisher": "SBS",
+     "distance": 0.2868
+    },
+    {
+     "id": 4417,
+     "title": "호남 반도체 기지, 광주 군 공항에…\"오직 속도전\"",
+     "publisher": "SBS",
+     "distance": 0.1469
+    },
+    {
+     "id": 4420,
+     "title": "호남 반도체 기지, 광주 군공항에…'속도전' 강조",
+     "publisher": "SBS",
+     "distance": 0.164
+    },
+    {
+     "id": 4424,
+     "title": "\"국운 걸린 경쟁\"…일주일 만에 첫 부지 확정",
+     "publisher": "SBS",
+     "distance": 0.2216
+    },
+    {
+     "id": 4650,
+     "title": "\"광주 군 공항 부지에 조성\"…호남 반도체 클러스터에 \"국운 걸린 경쟁\"",
+     "publisher": "MBN",
+     "distance": 0.1579
+    },
+    {
+     "id": 4661,
+     "title": "\"광주 군 공항 부지에 조성\"…호남 반도체 클러스터에 \"국운 걸린 경쟁\"",
+     "publisher": "MBN",
+     "distance": 0.1548
+    },
+    {
+     "id": 4704,
+     "title": "광주 군 공항 부지에 호남 반도체 클러스터 조성…李 \"오직 속도전, 선제 확보하길\" [프레스룸 경제라이브]",
+     "publisher": "MBN",
+     "distance": 0.1653
+    }
+   ]
+  },
+  {
+   "known_conflicts": [],
+   "event_id": 1413,
+   "event_title": "프리덤 250는 폭풍우와 낙뢰로 인한 안전사고 위험을 이유로 2024년 7월 4일 워싱턴DC 내셔널몰에서 예정된 '미국에 바치는 헌사' 행사와 '위대한 미국 박람회'를 연기했다.",
+   "selection": "targeted",
+   "size": 9,
+   "weak_count": 1,
+   "anchor_suspect": false,
+   "verdict": "exclude",
+   "not_belonging": [
+    4156,
+    4738
+   ],
+   "memo": "[claude 파생판정] 앵커는 폭풍우로 인한 건국 250주년 행사 차질. 폭염 사망자·정전 피해 기사는 다른 사건.",
+   "articles": [
+    {
+     "id": 2619,
+     "title": "‘폭염 견디니 뇌우’ 美 건국 250주년 행사 대피 명령...트럼프 “새벽 2시라도 연설”",
+     "publisher": "조선일보",
+     "distance": 0.2383
+    },
+    {
+     "id": 2640,
+     "title": "트럼프 “폭풍우에 독립기념일 행사 취소됐다가 내가 뒤집어”",
+     "publisher": "조선일보",
+     "distance": 0.1975
+    },
+    {
+     "id": 2648,
+     "title": "트럼프 “비가 건국 250주년 막지 못해”… 기념 연설 강행 의지",
+     "publisher": "조선일보",
+     "distance": 0.1596
+    },
+    {
+     "id": 2650,
+     "title": "美 폭염 이어 폭풍우 예보… 건국 250주년 기념행사 차질",
+     "publisher": "조선일보",
+     "distance": null
+    },
+    {
+     "id": 3169,
+     "title": "트럼프 “폭풍우에 독립기념일 행사 취소됐지만 내가 뒤집어”",
+     "publisher": "경향신문",
+     "distance": 0.2613
+    },
+    {
+     "id": 3225,
+     "title": "트럼프 “건국 250주년 행사 취소 결정, 내가 뒤집었다”",
+     "publisher": "국민일보",
+     "distance": 0.2432
+    },
+    {
+     "id": 4156,
+     "title": "미, 기록적 폭염으로 25명 사망...뇌우로 90만 가구 정전",
+     "publisher": "여성신문",
+     "distance": 0.428
+    },
+    {
+     "id": 4738,
+     "title": "'체감 43도' 미 폭염으로 사망자 속출…남미는 전례 없는 강추위",
+     "publisher": "MBN",
+     "distance": null
+    },
+    {
+     "id": 4747,
+     "title": "[굿모닝월드] 불꽃놀이만 볼 줄 알았는데",
+     "publisher": "MBN",
+     "distance": 0.3338
+    }
+   ]
+  },
+  {
+   "known_conflicts": [],
+   "event_id": 1467,
+   "event_title": "한국 해군, RIMPAC에서 연합지휘 임무 수행",
+   "selection": "targeted",
+   "size": 3,
+   "weak_count": 1,
+   "anchor_suspect": false,
+   "verdict": "exclude",
+   "not_belonging": [
+    3218
+   ],
+   "memo": "[claude 파생판정] 앵커는 RIMPAC 참가 한국 함정. '미 핵항모가 보여준 미래 해전'은 별개 기사.",
+   "articles": [
+    {
+     "id": 3195,
+     "title": "진주만에 위용 드러낸 K-해군… 정조대왕함·도산안창호함 내부 공개",
+     "publisher": "국민일보",
+     "distance": null
+    },
+    {
+     "id": 3218,
+     "title": "‘철의 도시’ 美 핵항모…10만t 거함이 보여준 미래 해전",
+     "publisher": "국민일보",
+     "distance": 0.4227
+    },
+    {
+     "id": 4660,
+     "title": "태평양 건너간 도산안창호함…60조 캐나다 잠수함 최종 수주 이끄나",
+     "publisher": "MBN",
+     "distance": null
+    }
+   ]
+  },
+  {
+   "known_conflicts": [],
+   "event_id": 1483,
+   "event_title": "대구 북구의회는 6일 제302회 임시회에서 김상혁 의원을 의장, 채장식 의원을 부의장으로 단독 선출했다.",
+   "selection": "targeted",
+   "size": 3,
+   "weak_count": 1,
+   "anchor_suspect": false,
+   "verdict": "exclude",
+   "not_belonging": [
+    3274,
+    3316
+   ],
+   "memo": "[claude 파생판정] 대구 북구의회 의장 선출과 경기도의회·김해시의회 의장 선출은 지역·기관이 모두 다르다. 지방의회 원구성이라는 형식만 같다.",
+   "articles": [
+    {
+     "id": 3274,
+     "title": "제12대 경기도의회 전반기 의장은?…민주당 4선 남종섭",
+     "publisher": "뉴시스",
+     "distance": 0.4207
+    },
+    {
+     "id": 3316,
+     "title": "김해시의회 조종현 의장, 정준호 부의장 선출",
+     "publisher": "뉴시스",
+     "distance": 0.3844
+    },
+    {
+     "id": 3320,
+     "title": "대구 북구의회, 김상혁 의장·채장식 부의장 선출…원구성 마무리",
+     "publisher": "뉴시스",
+     "distance": null
+    }
+   ]
+  },
+  {
+   "known_conflicts": [],
+   "event_id": 1329,
+   "event_title": "2024년 2월 28일 북한 외무성 대변인이 조선중앙통신을 통해 '비핵화는 절대적·영원히 없을 것'이라고 밝혔다.",
+   "selection": "targeted",
+   "size": 2,
+   "weak_count": 1,
+   "anchor_suspect": false,
+   "verdict": "unsure",
+   "not_belonging": [],
+   "memo": "[claude 파생판정] 한·EU 성명에 대한 반응과 쿼드 공동성명에 대한 반응 — 별개 같지만 같은 날 연속 논평일 수도 있어 유보.",
+   "articles": [
+    {
+     "id": 2728,
+     "title": "[속보] 北, 韓·EU성명에 “체제존중 위장 내던져…韓 적대 원칙 불변”",
+     "publisher": "매일경제",
+     "distance": 0.4107
+    },
+    {
+     "id": 2742,
+     "title": "‘북한 비핵화’ 쿼드 공동성명에…北 “비핵화 절대·영원히 없어”",
+     "publisher": "매일경제",
+     "distance": null
+    }
+   ]
+  },
+  {
+   "known_conflicts": [],
+   "event_id": 1411,
+   "event_title": "안규백 국방부 장관, 방첩사 해체 및 사관학교 통합 추진",
+   "selection": "targeted",
+   "size": 4,
+   "weak_count": 1,
+   "anchor_suspect": false,
+   "verdict": "unsure",
+   "not_belonging": [],
+   "memo": "[claude 파생판정] 오세훈의 통합 반대, 발표 연기, 동문회 총궐기 모두 사관학교 통합이라는 한 사안의 국면들이라 어디서 끊을지 확신이 없다.",
+   "articles": [
+    {
+     "id": 2327,
+     "title": "국방부, 사관학교 통합 기본계획 발표 2시간 전 돌연 연기",
+     "publisher": "조선일보",
+     "distance": 0.3273
+    },
+    {
+     "id": 2548,
+     "title": "사관학교 통합·방첩사 해체... 안규백 속도전, 軍원로들 탄식",
+     "publisher": "조선일보",
+     "distance": null
+    },
+    {
+     "id": 3037,
+     "title": "“3군 유기적 통합” 찬성론에…동문회 “전문성 약화” 8일 총궐기",
+     "publisher": "경향신문",
+     "distance": 0.3155
+    },
+    {
+     "id": 4235,
+     "title": "오세훈, 육middot;해middot;공군사관 통합 반대 quot;종합예술 중요하나, 미대middot;음대middot;체대 합치진 않아quot;",
+     "publisher": "프레시안",
+     "distance": 0.4058
+    }
+   ]
+  },
+  {
+   "known_conflicts": [],
+   "event_id": 1463,
+   "event_title": "2023년 10월 15일 가해자 B는 피해자 A를 살해한 혐의로 기소되었다.",
+   "selection": "targeted",
+   "size": 2,
+   "weak_count": 1,
+   "anchor_suspect": false,
+   "verdict": "unsure",
+   "not_belonging": [],
+   "memo": "[claude 파생판정] '스토킹 신고에도 숨진 여성' 분석 기사가 성남 교제살인 사건 자체를 다룬 것인지 제목만으로는 불확실.",
+   "articles": [
+    {
+     "id": 3816,
+     "title": "스토킹 신고·접근금지 명령에도 또 숨진 여성, 무엇을 바꿔야 하나",
+     "publisher": "미디어오늘",
+     "distance": 0.4056
+    },
+    {
+     "id": 3987,
+     "title": "결국 막지 못한 ‘성남 교제살인’…피해자는 ‘A등급’, 가해자는 ‘영장 제외’",
+     "publisher": "시사저널",
+     "distance": null
+    }
+   ]
+  },
+  {
+   "known_conflicts": [
+    [
+     2641,
+     2652
+    ],
+    [
+     2644,
+     2652
+    ],
+    [
+     2652,
+     3173
+    ],
+    [
+     2652,
+     3179
+    ]
+   ],
+   "event_id": 1405,
+   "event_title": "트럼프, 폭염 속에서 긴 연설 예고",
+   "selection": "targeted",
+   "size": 8,
+   "weak_count": 1,
+   "anchor_suspect": false,
+   "verdict": "unsure",
+   "not_belonging": [],
+   "memo": "[claude 파생판정] 이전 검수가 기념행사(2652)와 연설을 다른 사건으로 갈라 놓았다. 그 기준을 재현할 자신이 없어 유보.",
+   "articles": [
+    {
+     "id": 2612,
+     "title": "“공산주의는 암, 도려내야”… 건국 250주년에 이념 전쟁 나선 트럼프",
+     "publisher": "조선일보",
+     "distance": 0.4011
+    },
+    {
+     "id": 2617,
+     "title": "트럼프, 독립 250주년 연설에서 ‘장진호 전투’ 참전용사 호명… “정말 치열했다”",
+     "publisher": "조선일보",
+     "distance": 0.3811
+    },
+    {
+     "id": 2625,
+     "title": "40도 넘는 폭염에도… 80세 트럼프 “아주 긴 연설 할 것”",
+     "publisher": "조선일보",
+     "distance": null
+    },
+    {
+     "id": 2641,
+     "title": "폭염·뇌우·강풍에도 ‘건국 250주년’ 美 축제... 트럼프는 이틀째 “멸공”",
+     "publisher": "조선일보",
+     "distance": 0.2408
+    },
+    {
+     "id": 2644,
+     "title": "美 건국 250주년 수놓은 85만발 불꽃놀이… 기네스 기록 도전",
+     "publisher": "조선일보",
+     "distance": 0.2733
+    },
+    {
+     "id": 2652,
+     "title": "美 독립 250주년 대규모 기념행사… 트럼프 연설·기네스 불꽃놀이",
+     "publisher": "조선일보",
+     "distance": 0.2779
+    },
+    {
+     "id": 3173,
+     "title": "‘통합’ 없는 독립 250주년 트럼프 연설",
+     "publisher": "경향신문",
+     "distance": 0.3061
+    },
+    {
+     "id": 3179,
+     "title": "악천후에도 “연설 강행” 자정 돼서야 기네스급 불꽃놀이···트럼프가 ‘사유화’한 미국 건국 250주년, 분열로 얼룩져",
+     "publisher": "경향신문",
+     "distance": 0.2768
+    }
+   ]
+  },
+  {
+   "known_conflicts": [],
+   "event_id": 1458,
+   "event_title": "금융연구원, 원달러 환율 1500원대 유지 전망",
+   "selection": "targeted",
+   "size": 5,
+   "weak_count": 1,
+   "anchor_suspect": false,
+   "verdict": "exclude",
+   "not_belonging": [
+    2770,
+    4573
+   ],
+   "memo": "[claude 파생판정] 앵커는 금융연구원의 1500원대 환율 전망. 환헤지 파생계약 급증 우려와 글로벌 리스크 설문은 각각 다른 사건.",
+   "articles": [
+    {
+     "id": 2770,
+     "title": "“기업 무너지면 은행 독박 쓸 수도”…환헤지 파생계약 폭증 금융권 비상",
+     "publisher": "매일경제",
+     "distance": 0.4007
+    },
+    {
+     "id": 2789,
+     "title": "원화값 1500원대 고착에…은행 환위험부담 8.3조 '쑥'",
+     "publisher": "매일경제",
+     "distance": 0.3211
+    },
+    {
+     "id": 2795,
+     "title": "“환율 정상화? 기대 접으세요”…이젠 고환율이 뉴노멀인 시대",
+     "publisher": "매일경제",
+     "distance": 0.2458
+    },
+    {
+     "id": 2798,
+     "title": "금융硏,“1500원대 환율…상당 기간 유지될 가능성 높아”",
+     "publisher": "매일경제",
+     "distance": null
+    },
+    {
+     "id": 4573,
+     "title": "7월 글로벌 리스크 1위 '위험자산 가격 조정'…'강달러' 불안도 재등장",
+     "publisher": "이투데이",
+     "distance": 0.3429
+    }
+   ]
+  },
+  {
+   "known_conflicts": [],
+   "event_id": 1368,
+   "event_title": "한국 축구대표팀은 2026 FIFA 월드컵 아시아 지역 예선 A조 4차전에서 28일 일본과의 맞대결을 앞두고 있으며, 승리 시 32강 직행이 확정된다.",
+   "selection": "targeted",
+   "size": 3,
+   "weak_count": 1,
+   "anchor_suspect": false,
+   "verdict": "exclude",
+   "not_belonging": [
+    3831
+   ],
+   "memo": "[claude 파생판정] 앵커는 월드컵 예선 경우의 수. '32강 탈락 시 방송 광고 완판 흐름'은 방송계 사건.",
+   "articles": [
+    {
+     "id": 3831,
+     "title": "홍명보호 32강 탈락, JTBC·KBS 365억 ‘광고 완판’ 흐름 끊길까",
+     "publisher": "미디어오늘",
+     "distance": 0.4002
+    },
+    {
+     "id": 4037,
+     "title": "결국 8위까지 밀렸다…한국 축구에 남은 경우의 수 ‘세 가지’",
+     "publisher": "시사저널",
+     "distance": 0.1697
+    },
+    {
+     "id": 4040,
+     "title": "32강까지 딱 한 자리 남았다…한국 축구에 남은 가능성 ‘36%’",
+     "publisher": "시사저널",
+     "distance": null
+    }
+   ]
+  },
+  {
+   "known_conflicts": [],
+   "event_id": 1339,
+   "event_title": "이재명 대통령이 8일 청와대 영빈관에서 열린 취임 1주년 기자회견에서 발달장애인들의 그림투표용지 도입 요구에 대해 '현실적으로 불가능하다'고 밝혔다.",
+   "selection": "control",
+   "size": 2,
+   "weak_count": 0,
+   "anchor_suspect": false,
+   "verdict": "correct",
+   "not_belonging": [],
+   "memo": "[claude 파생판정] 대통령 발언과 그 직후 비서실 면담. 같은 사안의 연속.",
+   "articles": [
+    {
+     "id": 4067,
+     "title": "\"발달장애인 참정권\" 이 대통령 발언 후 비서실 면담 \"희망 봤다\"",
+     "publisher": "에이블뉴스",
+     "distance": 0.1579
+    },
+    {
+     "id": 4105,
+     "title": "이재명 대통령, \"발달장애인 그림투표용지 현실 불가능, 다른 방법 찾아야\"",
+     "publisher": "에이블뉴스",
+     "distance": null
+    }
+   ]
+  },
+  {
+   "known_conflicts": [],
+   "event_id": 1371,
+   "event_title": "베네수엘라에서 24일 발생한 연쇄 강진으로 사망자가 1430명으로 늘어났다.",
+   "selection": "control",
+   "size": 16,
+   "weak_count": 0,
+   "anchor_suspect": false,
+   "verdict": "correct",
+   "not_belonging": [],
+   "memo": "[claude 파생판정] 전부 베네수엘라 강진 참사. 사망자 수 갱신은 같은 사건의 시간 경과.",
+   "articles": [
+    {
+     "id": 2590,
+     "title": "베네수엘라 지진 후 11일 버텼다…어린이 등 4명 구조",
+     "publisher": "조선일보",
+     "distance": 0.2155
+    },
+    {
+     "id": 2698,
+     "title": "베네수 사망 3,500여명…절박감 속 구조 오보도",
+     "publisher": "연합뉴스TV",
+     "distance": 0.1586
+    },
+    {
+     "id": 3148,
+     "title": "[베네수 강진]사망자 3535명···간절함에 ‘구조’ 오보도",
+     "publisher": "경향신문",
+     "distance": 0.1109
+    },
+    {
+     "id": 3152,
+     "title": "폐허 속 독립기념일 맞은 베네수, 사망자 3340여명으로",
+     "publisher": "경향신문",
+     "distance": null
+    },
+    {
+     "id": 3160,
+     "title": "지진 잔해 속 독립 기념일 맞은 베네수엘라···사망자 3340명대로 증가",
+     "publisher": "경향신문",
+     "distance": 0.1406
+    },
+    {
+     "id": 3172,
+     "title": "[베네수 강진] 굿네이버스 대응단장 “폭탄이 투하된 듯한 모습···구호품 반입 절차 마련 시급”",
+     "publisher": "경향신문",
+     "distance": 0.2003
+    },
+    {
+     "id": 3181,
+     "title": "[베네수 강진]사망자 3000명 달해···“생존자 구조 종료, 본격적 시신 수습 단계”",
+     "publisher": "경향신문",
+     "distance": 0.1509
+    },
+    {
+     "id": 3386,
+     "title": "베네수엘라 지진 사망자 3535명, 부상자는 16740명으로 증가",
+     "publisher": "뉴시스",
+     "distance": 0.1277
+    },
+    {
+     "id": 3405,
+     "title": "베네수 강진 잔해 속 11일 버틴 생존자 4명 극적 구조",
+     "publisher": "뉴시스",
+     "distance": 0.185
+    },
+    {
+     "id": 3744,
+     "title": "베네수 강진 잔해 속 11일 버틴 생존자 4명 극적 구조",
+     "publisher": "동아일보",
+     "distance": 0.2133
+    },
+    {
+     "id": 3954,
+     "title": "베네수 지진 사망자 3535명…\"어린이 구조 보도는 오보\"",
+     "publisher": "세계일보",
+     "distance": 0.1205
+    },
+    {
+     "id": 3962,
+     "title": "일손도 보관장소도 태부족… 베네수엘라, 신원 확인 못한 채 매장",
+     "publisher": "세계일보",
+     "distance": 0.2962
+    },
+    {
+     "id": 4211,
+     "title": "베네수엘라 지진 사망자 1430명으로 늘어hellip;실종자 무려 7만명",
+     "publisher": "프레시안",
+     "distance": null
+    },
+    {
+     "id": 4510,
+     "title": "베네수 지진 사망자 3천535명…\"어린이 구조 보도는 오보\"",
+     "publisher": "SBS",
+     "distance": 0.1151
+    },
+    {
+     "id": 4725,
+     "title": "베네수엘라 지진 참사, '11일 만에 구조된 어린이' 보도는 오보",
+     "publisher": "MBN",
+     "distance": 0.1394
+    },
+    {
+     "id": 4729,
+     "title": "베네수 지진 사상자 2만명 육박…매몰자 생환 가능성 희박",
+     "publisher": "MBN",
+     "distance": 0.1235
+    }
+   ]
+  },
+  {
+   "known_conflicts": [],
+   "event_id": 1421,
+   "event_title": "6일부터 서울 외환시장에서 원화와 달러를 주중 24시간 거래한다.",
+   "selection": "control",
+   "size": 2,
+   "weak_count": 0,
+   "anchor_suspect": false,
+   "verdict": "correct",
+   "not_belonging": [],
+   "memo": "[claude 파생판정] 둘 다 원·달러 24시간 거래 시행.",
+   "articles": [
+    {
+     "id": 123,
+     "title": "6일부터 원화와 달러 주중 24시간 거래…외환 거래 공백 줄지만, 환율 변동성 커질 우려",
+     "publisher": "조선일보",
+     "distance": null
+    },
+    {
+     "id": 2768,
+     "title": "24시간 외환시장 거래 첫날…오전 6시 원·달러 환율 1530원",
+     "publisher": "매일경제",
+     "distance": 0.1708
+    }
+   ]
+  },
+  {
+   "known_conflicts": [],
+   "event_id": 1442,
+   "event_title": "경기남부경찰청, 간호사 일기장 분석 중",
+   "selection": "control",
+   "size": 2,
+   "weak_count": 0,
+   "anchor_suspect": false,
+   "verdict": "correct",
+   "not_belonging": [],
+   "memo": "[claude 파생판정] 둘 다 태움 사망 간호사 사건의 일기장·괴롭힘 정황.",
+   "articles": [
+    {
+     "id": 2557,
+     "title": "병원 근무 1년간 ‘괴롭힘’ 기록... 경찰, ‘태움 사망 간호사’ 일기장 분석",
+     "publisher": "조선일보",
+     "distance": null
+    },
+    {
+     "id": 2834,
+     "title": "“출근하기 싫다”던 20대 병원 직원...유족 “직장 내 괴롭힘 당해” 주장",
+     "publisher": "매일경제",
+     "distance": 0.2672
+    }
+   ]
+  },
+  {
+   "known_conflicts": [],
+   "event_id": 1493,
+   "event_title": "경찰, 정이한 구속영장 청구",
+   "selection": "control",
+   "size": 10,
+   "weak_count": 0,
+   "anchor_suspect": false,
+   "verdict": "correct",
+   "not_belonging": [],
+   "memo": "[claude 파생판정] 전부 정이한 구속영장 청구 건.",
+   "articles": [
+    {
+     "id": 2481,
+     "title": "경찰, ‘피습 자작극 의혹’ 정이한 구속영장 청구",
+     "publisher": "조선일보",
+     "distance": null
+    },
+    {
+     "id": 2809,
+     "title": "정이한 전 부산시장 후보 구속영장 청구…‘피습 자작극’ 의혹",
+     "publisher": "매일경제",
+     "distance": 0.1166
+    },
+    {
+     "id": 3103,
+     "title": "‘음료 테러 자작극 의혹’··· 정이한 전 개혁신당 부산시장 후보, 8일 구속 여부 결정",
+     "publisher": "경향신문",
+     "distance": 0.1159
+    },
+    {
+     "id": 3188,
+     "title": "‘음료테러 자작극 의혹’ 정이한 전 후보 구속영장 청구",
+     "publisher": "국민일보",
+     "distance": 0.1028
+    },
+    {
+     "id": 3217,
+     "title": "‘피습 자작극’ 의혹 정이한 전 부산시장 후보 구속영장 신청",
+     "publisher": "국민일보",
+     "distance": 0.1081
+    },
+    {
+     "id": 3526,
+     "title": "'피습 자작극 의혹' 정이한, 구속기로…8일 영장심사(종합)",
+     "publisher": "뉴시스",
+     "distance": 0.1306
+    },
+    {
+     "id": 3533,
+     "title": "'피습 자작극 의혹' 정이한 전 부산시장 후보에 구속영장 청구",
+     "publisher": "뉴시스",
+     "distance": 0.0686
+    },
+    {
+     "id": 3934,
+     "title": "‘음료 피습 자작극 의혹’ 정이한 구속영장 청구",
+     "publisher": "세계일보",
+     "distance": 0.1194
+    },
+    {
+     "id": 4128,
+     "title": "'피습 자작극 의혹' 정이한 개혁신당 부산시장 후보 구속영장",
+     "publisher": "여성신문",
+     "distance": 0.0863
+    },
+    {
+     "id": 4479,
+     "title": "'피습 자작극 의혹' 정이한 전 부산시장 후보 구속영장 청구",
+     "publisher": "SBS",
+     "distance": 0.0857
+    }
+   ]
+  }
+ ]
+}

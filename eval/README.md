@@ -292,6 +292,234 @@ python eval/run_iteration.py --database-url "postgresql://..." \
 
 ---
 
+## 제약 검사 — 사람 검수 정답 대비 회귀 테스트
+
+위의 지표(ARI/B-cubed/NMI)가 **합성 더미 데이터**에 대한 전역 품질 점수라면, `constraint_checks.py`는
+**사람이 직접 검수한 실제 기사 쌍 제약**을 하나씩 판정한다. 어떤 기사 쌍이 왜 틀렸는지가 그대로
+나오므로 회귀 원인 추적에 쓴다. 두 계열은 대체가 아니라 보완 관계다.
+
+| | 클러스터링 지표 (`evaluate.py`) | 제약 검사 (`constraint_checks.py`) |
+|---|---|---|
+| 정답 출처 | `generate_dummy.py`가 만든 합성 라벨 | 검수자가 손으로 매긴 실제 기사 쌍 |
+| 입력 | Postgres DB 직접 조회 | JSON 파일 2개 (DB 불필요) |
+| 산출 | ARI / B-cubed / NMI / V-measure | must-link·cannot-link 충족률 + 위반 쌍 목록 |
+| 통과 기준 | (게이트 아님) | 기준선 대비 충족률 하락 없음 |
+
+```powershell
+# 1) 측정만 (종료 코드 항상 0)
+python eval/constraint_checks.py eval/data/constraints/review_2026-07-20.json snapshot.json
+
+# 2) 현재 결과를 기준선으로 저장
+python eval/constraint_checks.py `
+    eval/data/constraints/review_2026-07-20.json snapshot.json `
+    --write-baseline eval/data/constraints/baseline.json
+
+# 3) 회귀 게이트 (기준선 대비 하락 시 종료 코드 1)
+python eval/constraint_checks.py `
+    eval/data/constraints/review_2026-07-20.json snapshot.json `
+    --baseline eval/data/constraints/baseline.json
+```
+
+**통과 기준은 "위반 0"이 아니다.** must_link만 이벤트 1,244쌍 + 토픽 1,309쌍이라 LLM 군집화가 전부
+맞출 수는 없고, 그 기준으로는 게이트가 첫날부터 영구 실패해 무용지물이 된다. 실행 간 변동이
+관측되면 `--tolerance 0.02`처럼 허용 하락폭을 준다.
+
+### 토픽 반복 하네스 — `topic_harness.py`
+
+위 단계를 하나로 묶어 반복 실행하고 결과를 누적한다. 토픽 분류를 개선할 때는 이걸 쓴다.
+
+```powershell
+# 1회차 — 기준선
+python eval/topic_harness.py --database-url "postgresql://localhost/..." `
+    --run-id t-000 --config-tag baseline
+
+# 2회차 — 파라미터를 바꿔 재실행 (직전 실행과 자동 비교)
+python eval/topic_harness.py --database-url "postgresql://localhost/..." `
+    --run-id t-001 --config-tag "assign 0.70" `
+    --set TOPIC_ASSIGN_SCORE_THRESHOLD=0.70
+
+# 분류 없이 채점만 다시
+python eval/topic_harness.py --run-id t-001-rescore --skip-classify
+```
+
+한 번 실행하면 **토픽 레이어만 초기화**(이벤트 보존) → `classify_topics` 드레인(stdout을
+진단 로그로 캡처) → 스냅샷 추출 → 충족률 → 원인 진단 → 루브릭 교차 확인 →
+`results/topic_runs.csv` 한 줄 누적 + `results/topic-<run-id>.md` 리포트까지 간다.
+
+**이벤트를 보존하는 게 핵심이다.** 이벤트 레이어를 고정해야 충족률 변화가 토픽 레버의
+효과라고 말할 수 있고, 이벤트 재분류 API 비용도 들지 않는다.
+
+`--set`은 `.env`를 임시 패치했다가 실행 후 복원한다. 분류기가
+`load_dotenv(override=True)`를 쓰므로 셸 `export`는 무시된다 — 이게 유일하게 듣는 방법이다.
+
+#### 충족률만 보면 반드시 속는다
+
+정답의 토픽 cannot-link 제약은 **0쌍**이다. 모든 이벤트를 한 토픽에 몰아넣어도 must-link
+충족률은 100%가 나온다. 그래서 하네스는 리포트에 **토픽 개수와 R-T1(중복 토픽)을 충족률
+바로 옆에** 싣고, 충족률이 올랐는데 토픽 수가 20% 넘게 줄면 경고한다.
+
+```
+⚠️ 충족률이 올랐지만 토픽 수가 100 → 60로 20% 넘게 줄었습니다.
+   과병합으로 점수를 샀을 가능성이 높습니다.
+```
+
+위반이 전부 `이벤트 분류 실패의 전파`로 나오면 그것도 경고한다 — 그 경우 토픽 레버를
+아무리 만져도 개선되지 않으므로 이벤트 분류를 먼저 고쳐야 한다.
+
+### 이벤트 하네스 — `event_harness.py`
+
+같은 뼈대로 이벤트 레이어를 잰다. 초기화가 기사 요약은 보존하되 **토픽까지 지운다** —
+이벤트 구성이 바뀌면 그 위의 토픽도 다시 만들어야 하기 때문이다. 토픽 지표가 필요하면
+이 하네스를 돌린 뒤 `topic_harness.py`를 이어서 돌린다.
+
+```powershell
+python eval/event_harness.py --database-url "postgresql://localhost/..." `
+    --run-id e-000 --config-tag baseline
+```
+
+이벤트는 실패가 **양방향**이라 경고가 더 중요하다. 모두 병합하면 must-link 100%,
+모두 쪼개면 cannot-link 100%가 나온다. 그래서 ⑴ 단일기사 이벤트 70% 초과 ⑵ 충족률 상승 +
+이벤트 수 20% 이상 감소 ⑶ must-link 상승 + cannot-link 하락 세 가지를 경고한다.
+
+### 여러 설정을 한 번에 — `sweep.py`
+
+개선은 설정 여럿을 비교해야 한다. 스윕은 그 반복을 무인으로 돌린다.
+
+```powershell
+# 먼저 계획만 확인 (비용이 설정 수만큼 곱해지므로 권장)
+python eval/sweep.py --harness topic --run-prefix s1 `
+    --config "baseline:" `
+    --config "assign070:TOPIC_ASSIGN_SCORE_THRESHOLD=0.70" `
+    --config "combo:TOPIC_DISTANCE_THRESHOLD=0.60,TOPIC_ASSIGN_SCORE_THRESHOLD=0.85" `
+    --dry-run
+
+# 실제 실행 (--dry-run 만 빼고 --database-url 추가)
+```
+
+끝나면 이번 스윕의 실행들만 골라 비교표를 출력한다.
+
+```
+  config_tag  topic_must_rate  topics_total
+  -----------------------------------------
+  기준선      0.42             120
+  assign070   0.55             98
+  거리완화    0.51             134
+```
+
+**충족률만 보고 고르면 안 된다.** 위 예에서 `assign070`이 충족률은 가장 높지만 토픽 수가
+120 → 98로 줄었다 — 과병합으로 점수를 샀을 수 있다. 각 실행의 `.md` 리포트에 경고가
+찍혔는지 반드시 확인하라.
+
+### 반복 실험 시 초기화는 `reset_classifier_only.py`
+
+`reset_test_db.py`는 `article_ai_results`를 **통째로 삭제**한다. 합성 더미를 매번 새로 만드는
+루프에서는 맞지만, 실제 기사 2,578건으로 제약 검사를 반복할 때 쓰면 기사 요약(수집기 단계가
+LLM으로 만든 비싼 산출물)까지 날아가 매 반복 재생성해야 한다.
+
+```powershell
+EVAL_ALLOW_DESTRUCTIVE_RESET=1 `
+  python eval/reset_classifier_only.py --database-url "postgresql://localhost/..." --yes
+```
+
+분류기 출력(`event_articles`/`events`/`topic_causes`/`topics`)만 지우고
+`article_ai_results.status`를 `'done'`으로 되돌린다. 행과 요약은 그대로 남는다.
+안전 가드는 `reset_test_db.py`와 동일한 3중이다.
+
+비교 대상 `snapshot.json`을 뽑는 추출 SQL과 입력 형식은 `data/constraints/README.md`에,
+원천 기사 시딩 절차는 `data/seed/README.md`에 있다.
+
+### 고칠 수 있는 문제인지 먼저 본다 — `diagnose_structure.py`
+
+아래 A~D 처방은 전부 **"기사를 어느 이벤트에 넣을까"를 바꾸는** 레버다. 그런데 그 방향으로
+아무리 잘 고쳐도 충족 쌍이 늘지 않는 상태가 있다. 그때는 A~D 어느 것도 듣지 않는다.
+
+실제로 겪었다. 이벤트 must-link 위반을 줄이려고 배정 프롬프트·점수 임계값·후보 순서·
+1:1 판정까지 다섯 가지를 시도했고 전부 순손실이었다. 나중에 상한을 재보니
+**정답대로 기사를 완벽히 재배정해도** 충족 쌍이 줄었다. 5초면 알 수 있는 사실이었다.
+
+```powershell
+python eval/diagnose_structure.py `
+    eval/data/constraints/review_2026-07-20.json snapshot.json
+# 토픽을 보려면 --unit topic, 기계 판독은 --json
+```
+
+네 가지를 답한다.
+
+| | 묻는 것 | 나쁘면 |
+|---|---|---|
+| **1** | 정답끼리 모순인가 (must 로 이어진 기사 사이에 cannot 이 있나) | 정답을 먼저 고친다 |
+| **2** | 정답대로 묶으면 몇 %인가 (달성 가능한 상한) | 목표 자체가 잘못됐다 |
+| **3** | 현재 경계가 정답을 얼마나 가로지르나 (과병합/과분할) | 경계가 어긋나 있다 |
+| **4** | **기사를 옮겨서 고칠 수 있나** (얻는 쌍 vs 잃는 쌍) | **A~D 처방이 전부 무의미하다** |
+
+[4]가 핵심이다. 기사 하나는 보통 여러 must 이웃을 갖는데, 위반 쌍 하나를 고치려고 옮기면
+**지금 같은 이벤트에 있어서 이미 충족 중인 다른 이웃들과 갈라진다.** 합이 음수면 배정 로직을
+어떻게 바꿔도 손해이므로, 쪼개고 다시 묶는 재군집 쪽으로 가야 한다.
+
+> 2026-07-20 정답 + e002 스냅샷 기준 관측값: 모순 0쌍 / 상한 must 100%·cannot 87.5% /
+> 과병합 7개·과분할 6개 / **이동 순효과 −184쌍**. 재배정 계열은 전부 막혀 있다.
+
+### 위반 원인 진단 — 무엇을 고쳐야 하는지 찾기
+
+충족률은 "얼마나 틀렸나"까지만 알려준다. 같은 must-link 위반이라도 원인이 넷이고
+**처방이 서로 다르다.** `diagnose_violations.py`가 분류기 로그와 대조해 그 넷을 가른다.
+
+> 위 `diagnose_structure.py`의 [4]가 음수라면 이 절의 A~D 처방은 전부 듣지 않는다.
+> 원인을 가르기 전에 그것부터 확인하라.
+
+| 원인 | 무슨 일이 있었나 | 처방 |
+|---|---|---|
+| **A** | 상대 이벤트가 pgvector 후보에 아예 없었다 | `EVENT_DISTANCE_THRESHOLD` 완화 |
+| **B** | 후보엔 있었지만 프롬프트에서 잘려 LLM이 못 봤다 | `MAX_EVENT_CANDIDATES`(prompts.py) 상향 |
+| **C** | LLM이 보고도 다른 사건이라 판단했다 | 배정 프롬프트 수정 |
+| **D** | LLM은 붙이려 했는데 가드레일이 뒤집었다 | `EVENT_ASSIGN_SCORE_THRESHOLD` 완화 |
+
+```powershell
+# 1) 분류기 로그를 파일로 받는다 (stdout이 JSONL)
+python classify_events.py --database-url "postgresql://..." > events.log
+python classify_topics.py --database-url "postgresql://..." > topics.log
+
+# 2) 정답 + 스냅샷 + 로그를 대조한다
+python eval/diagnose_violations.py `
+    eval/data/constraints/review_2026-07-20.json snapshot.json events.log `
+    --topic-log topics.log
+```
+
+**B 유형은 이 도구 없이는 찾을 수 없다.** `EVENT_CANDIDATE_LIMIT`(기본 12)이
+`MAX_EVENT_CANDIDATES`(8)보다 커서, 정답 이벤트가 9~12위에 오면 LLM은 그 후보를 본 적도
+없는데 "다른 사건으로 판단함"으로 기록된다. 임계값을 아무리 만져도 안 고쳐진다.
+
+출력에는 처방 시뮬레이션도 포함된다 — B를 전부 구제할 `MAX_EVENT_CANDIDATES` 최소값과,
+점수 임계값을 낮출 때의 **양방향 트레이드오프**(must-link 구제 vs cannot-link 파손)다.
+단 임계값 변경은 이벤트 구성 자체를 바꿔 이후 후보 목록에 연쇄하므로 **1차 근사**이고,
+최종 확인은 재실행으로 해야 한다.
+
+#### 토픽 위반은 먼저 "이벤트 탓인지"부터 가른다
+
+`--topic-log`를 주면 토픽 제약도 진단한다. 여기서 첫 갈래가 가장 중요하다.
+
+**같은 이벤트에 속한 기사는 토픽도 반드시 같다**(`events.topic_id`가 하나뿐이므로).
+따라서 토픽 must-link 위반은 두 기사가 **다른 이벤트에 갔다**는 뜻이고, 그 분리 자체가
+정답에 어긋난다면(이벤트 must-link도 위반) **토픽 레버로는 절대 고쳐지지 않는다.**
+
+| 원인 | 의미 | 처방 |
+|---|---|---|
+| **0** | 이벤트 분류 실패의 전파 | 토픽 말고 이벤트를 먼저 고친다 |
+| **1** | 부모는 같은데 서브토픽에서 갈림 | `SUBTOPIC_ASSIGN_SCORE_THRESHOLD` 또는 `TOPIC_SUBTOPIC_SIM_THRESHOLD` |
+| **A** | 부모 후보 검색에 없음 | `TOPIC_DISTANCE_THRESHOLD` 상향 |
+| **B** | 프롬프트에서 절삭 | `MAX_CANDIDATES`(topic_classifier/prompts.py) 상향 |
+| **C** | LLM이 다른 토픽으로 판단 | `build_parent_topic_assignment_prompt` 수정 |
+| **D** | 가드레일이 뒤집음 | `TOPIC_ASSIGN_SCORE_THRESHOLD` 하향 |
+
+1번(서브토픽 분할)은 `decided_by`를 함께 보여준다. `SUBTOPIC_MODE=embedding`이면 LLM
+배정 판단이 아예 없으므로 프롬프트·점수 레버가 적용되지 않고 유사도 임계값만 유효하다.
+
+> ⚠️ 정답의 **토픽 cannot-link 제약은 0쌍**이다. 모든 기사를 한 토픽에 몰아넣어도
+> 충족률은 만점으로 나온다. 토픽 과병합은 이 정답으로 감지할 수 없으니 `rubric_checks.py`의
+> R-T1(중복 토픽)과 토픽 개수를 반드시 함께 보라.
+
+---
+
 ## 규모 단계적 확장 절차
 
 | 단계 | 기사 수 | 정답 이벤트 수 | 목적 |
@@ -316,14 +544,25 @@ eval/
   data/
     dummy_articles.json      # generate_dummy.py 출력
     gold_labels.json         # article_guid → {gold_topic, gold_subtopic, gold_event}
+    constraints/             # 사람 검수 정답 (constraints-v1) — 재생성 불가, 덮어쓰지 말 것
+    seed/                    # 원천 기사 INSERT 덤프 (전체 2,578건 / 부분집합 313건)
   results/                   # (git 미추적 — 실행 시 자동 생성)
     metrics.csv              # 실행별 지표 누적 (CSV_COLUMNS 순서)
     <run-id>.md              # 실행별 상세 리포트
   generate_dummy.py          # taxonomy → (LLM 또는 --dry-run) → dummy + gold
   ingest_dummy.py            # 더미 기사 DB 주입 (guid 중복 검사로 멱등)
-  reset_test_db.py           # 분류기 출력 초기화 (3중 안전 가드)
+  reset_test_db.py           # 분류기 출력 + 더미 기사 초기화 (합성 루프용, 3중 안전 가드)
+  reset_classifier_only.py   # 분류기 출력만 초기화 — 기사 요약 보존 (실제 코퍼스 반복용)
   metrics.py                 # 레벨별 지표 계산 (순수 함수)
   evaluate.py                # DB 예측 읽기 + gold 비교 → 리포트 + CSV 행 추가
+  extract_snapshot.py        # 분류 결과 DB → 제약 검사 입력 JSON (읽기 전용)
+  harness_common.py          # 두 하네스 공통 배관 (CSV 누적·비교·드레인·.env 패치)
+  topic_harness.py           # 토픽 반복 검증·개선 하네스 (초기화→분류→채점→진단→누적)
+  event_harness.py           # 이벤트 반복 검증·개선 하네스 (요약 보존, 토픽까지 초기화)
+  sweep.py                   # 여러 설정을 연속 실행하고 한 표로 비교
+  rubric_checks.py           # 엔티티 정의 루브릭 위반 산출 (DB 스냅샷)
+  constraint_checks.py       # 사람 검수 제약 충족률 + 기준선 회귀 게이트 (JSON 입력, DB 불필요)
+  diagnose_violations.py     # 위반 원인을 분류기 로그와 대조해 A/B/C/D로 진단 + 처방 시뮬레이션
   run_iteration.py           # 전체 사이클 오케스트레이션
   README.md                  # 이 파일
 ```
